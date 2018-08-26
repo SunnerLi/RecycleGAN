@@ -9,7 +9,7 @@ import os
 down_sample = 0
 over_sample = 1
 
-def _domain_2_decode_domain(domain):
+def _domain2folder(domain):
     domain_list = domain.split('/')
     while True:
         if '.' in domain_list:
@@ -19,6 +19,9 @@ def _domain_2_decode_domain(domain):
         else:
             break
     return '_'.join(domain_list)       
+
+def _file2folder(file_name):
+    return '_'.join(file_name.split('.')[:-1])
 
 class VideoDataset(data.Dataset):
     def __init__(self, root, transform = None, T = 10, use_cv = False, decode_root = './decode', sample_method = down_sample, to_tensor = True):
@@ -31,35 +34,53 @@ class VideoDataset(data.Dataset):
             ------------------------------------------------------------------------------------------------
             In this class, we use 'info' object to store the whole information toward the video folders
             The structure of info is like this: 
+            # info = {
+
+            #     # Store the information before decoding
+            #     'origin' : {
+            #         'domains': ['dataset/A', 'dataset/B'],
+            #         'videos' : {
+            #             'dataset/A': ['video1.wav', 'video2.wav'],
+            #             'dataset/B': ['video1.wav', 'video2.wav'],
+            #         }
+            #     },
+
+            #     # Store the information after decoding
+            #     'decode' : {
+            #         'domains': ['dataset_A', 'dataset_B'],
+            #         'videos' : {
+            #             'dataset_A': ['video1', 'video2'],
+            #             'dataset_B': ['video1', 'video2'],
+            #         },
+            #         'frames' : {
+            #             'dataset_A': {
+            #                 'video1': ['frame01.png', 'frame02.png']
+            #                 'video2': ['frame01.png', 'frame02.png']
+            #             },
+            #             'dataset_B': {
+            #                 'video1': ['frame01.png', 'frame02.png']
+            #                 'video2': ['frame01.png', 'frame02.png']
+            #             }
+            #         }
+            #     }
+            # }
+
             info = {
-
-                # Store the information before decoding
-                'origin' : {
-                    'domains': ['dataset/A', 'dataset/B'],
-                    'videos' : {
-                        'dataset/A': ['video1.wav', 'video2.wav'],
-                        'dataset/B': ['video1.wav', 'video2.wav'],
-                    }
-                },
-
-                # Store the information after decoding
-                'decode' : {
-                    'domains': ['dataset_A', 'dataset_B'],
-                    'videos' : {
-                        'dataset_A': ['video1.wav', 'video2.wav'],
-                        'dataset_B': ['video1.wav', 'video2.wav'],
-                    },
-                    'frames' : {
-                        'video_A': ['frame01.png', 'frame02.png'],
-                        'video_B': ['frame01.png', 'frame02.png'],
-                    }
+                'domains': ['dataset/A', 'dataset/B'],
+                'videos' : {
+                    'dataset/A': ['dataset/A/video1.wav', 'dataset/A/video2.wav'],
+                    'dataset/B': ['dataset/B/video1.wav', 'dataset/B/video2.wav'],
+                }
+                'frames' : {
+                    'dataset/A': [['.decode/dataset_A/video1/1.png', '.decode/dataset_A/video1/2.png'], ['.decode/dataset_A/video2/1.png', '.decode/dataset_A/video2/2.png']]
+                    'dataset/B': [['.decode/dataset_B/video1/1.png', '.decode/dataset_B/video1/2.png'], ['.decode/dataset_B/video2/1.png', '.decode/dataset_B/video2/2.png']]
                 }
             }
             Here is some definition of keys:
-            * domains:  the list object, each element represent single domain name
-            * videos :  the list object, each element represent the path of video folder
-            * frames :  the dict object, the key of frames obj is the element in videos.
-                        while the element is the list object which store the name of decoded frame
+                * domains:  the list object, each element represent single domain name
+                * videos :  the list object, each element represent the path of video folder
+                * frames :  the dict object, the key of frames obj is the element in videos.
+                            while the element is the list object which store the name of decoded frame
 
             Code notation:
                 * root          : The list object which contains several "domain". 
@@ -76,8 +97,10 @@ class VideoDataset(data.Dataset):
                     decode_folder   - The temporal folder to store the decoded image
                     T               - The maximun image in single batch sequence
         """
+        # TODO: Try to use the original style
+        
         # Record the variable
-        self.root = root
+        # self.root = root
         self.transform = transform
         self.T = T
         self.use_cv = use_cv
@@ -85,56 +108,81 @@ class VideoDataset(data.Dataset):
         self.sample_method = sample_method
         self.to_tensor = to_tensor
         self._len = None
+        # self.info = Dict({
+        #     'origin' : {
+        #         'domains': root,
+        #         'videos' : {}
+        #     },
+        #     'decode' : {
+        #         'domains': [],
+        #         'videos' : {},
+        #         'frames' : {}
+        #     }
+        # })
         self.info = Dict({
-            'domains': [],
-            'videos': self.root,
+            'domains': root,
+            'videos': {},
             'frames': {}
         })
 
-        # Obtain the list of video list
-        self.videos = []
-        for domain in self.root:
-            self.videos.append(os.listdir(domain))
+        # ------------------------------------------------------------------
+        # Complete the info object
+        # ------------------------------------------------------------------
+        from glob import glob
+        # for domain in self.info.origin.domains:
+        #     # origin.videos
+        #     self.info.origin.videos[domain] = os.listdir(domain)
+
+        #     # decode.domains
+        #     domain_folder = _domain2folder(domain)
+        #     self.info.decode.domains.append(domain_folder)
+
+        #     # decode.videos
+        #     self.info.decode.videos[domain] = [_file2folder(video_name) for video_name in os.listdir(domain)]
+        for domain in self.info.domains:
+            self.info.videos[domain] = glob(domain)
 
         # Check if the decode process should be conducted again
         should_decode = not os.path.exists(self.decode_root)
         if not should_decode:
-            for domain in self.root:
-                for video_name in domain:
-                    folder_name = '.'.join(video_name.split('.')[:-1])
-                    folder_path = os.path.join(self.decode_root, domain, folder_name)
-                    if not os.path.exists(folder_path):
-                        should_decode = True
-                        break
+            # for domain in self.info.origin.videos.keys():
+            #     for video_name in self.info.origin.videos[domain]:
+            #         folder_name = _file2folder(video_name)
+            #         print(folder_name, self.info.decode.videos[domain])
+            #         if folder_name not in self.info.decode.videos[domain]:
+            #             should_decode = True
+            #             break
+            for domain in self.info.domains:
+                for video in self.info.videos[domain]:
+                    if _file2folder(video)
 
         # Decode the video if needed
         if should_decode:
             if os.path.exists(self.decode_root):
                 subprocess.call(['rm', '-rf', self.decode_root])
             os.mkdir(self.decode_root)
-            for domain in self.root:
-                self.decodeVideo(domain)
+            self.decodeVideo()
 
         # Obtain the list of frame list
         self.frames = []
+        print(self.info)
 
-    def decodeVideo(self, domain):
+        exit()
+
+    def decodeVideo(self):
         """
             Decode the single video into a series of images, and store into particular folder
 
             Arg:    domain  - The str, the name of video domain
         """
-        decode_domain = _domain_2_decode_domain(domain)
-        decode_domain_path = os.path.join(self.decode_root, decode_domain)
-        os.mkdir(decode_domain_path)
-        for video_name in os.listdir(domain):
-            folder_name = '.'.join(video_name.split('.')[:-1])
-            folder_path = os.path.join(decode_domain_path, folder_name)
-            source = os.path.join(domain, video_name)
-            target = os.path.join(folder_path, "%5d.png")
-            os.mkdir(folder_path)
-            # print(' '.join(['ffmpeg', '-i', source, '-vframes', str(100), target]))
-            subprocess.call(['ffmpeg', '-i', source, '-vframes', str(100), target])
+        for domain_folder in self.info.decode.domains:
+            os.mkdir(os.path.join(self.decode_root, domain_folder))
+            for video_name in self.info.origin.videos[domain_folder]:
+                os.mkdir(os.path.join(self.decode_root, domain_folder, _file2folder(video_name)))
+                source = os.path.join(domain_folder, video_name)
+                target = os.path.join(self.decode_root, domain_folder, _file2folder(video_name), "%5d.png")
+                # print(' '.join(['ffmpeg', '-i', source, '-vframes', str(100), target]))
+                subprocess.call(['ffmpeg', '-i', source, '-vframes', str(100), target])
 
     def __len__(self):
         """

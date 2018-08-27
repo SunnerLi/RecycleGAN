@@ -81,8 +81,6 @@ class VideoDataset(data.Dataset):
                     decode_folder   - The temporal folder to store the decoded image
                     T               - The maximun image in single batch sequence
         """
-        # TODO: we don't consider the rank=6 situation
-
         # Record the variable
         self.root = root
         self.transform = transform
@@ -189,6 +187,7 @@ class VideoDataset(data.Dataset):
 
             # Transform the film sequence
             film_sequence = np.asarray(film_sequence)
+            # print('film_sequence size: ', film_sequence.shape)
             if self.transform:
                 film_sequence = self.transform(film_sequence)
 

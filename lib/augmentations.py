@@ -1,5 +1,11 @@
+import numpy as np
 import random
+import torch
 import cv2
+
+"""
+    This script defines some operation to do the augmentation toward video sequence
+"""
 
 def rotate(image, angle, center=None, scale=1.0):
     """
@@ -16,36 +22,97 @@ class Compose(object):
     def __init__(self, augmentations):
         self.augmentations = augmentations
 
-    def __call__(self, a_list, b_list):
-        # Crop the video as the same length
-        length = min(len(a_list), len(b_list))
-        a_list = a_list[:length]
-        b_list = b_list[:length]
+    def __call__(self, video_sequence):
+        """
+            Do the series of augmentation the video sequence
 
-        # Use the same random seed for whole video
+            Arg:    video_sequence_list - The list of video sequence
+            Ret:    The list of argumented video sequence
+        """
         seed = random.random()
-
-        # Do other augmentation
-        aug_a_list = []
-        aug_b_list = []
-        for i in range(length):
-            assert a_list[i].size == b_list[i].size
-            for aug_op in self.augmentations:
-                aug_a, aug_b = aug_op(a_list[i], b_list[i], seed)
-            aug_a_list.append(aug_a)
-            aug_b_list.append(aug_b)
-        return aug_a_list, aug_b_list
+        for aug_op in self.augmentations:
+            video_sequence = aug_op(video_sequence, seed)
+        return video_sequence
 
 class RandomRotate(object):
     def __init__(self, degree):
         self.degree = degree
 
-    def __call__(self, a_frame, b_frame, seed = 0.0):
+    def __call__(self, tensor, seed = 0.0):
+        """
+            Do the rotation with random angle
+
+            Arg:    tensor  - The np.ndarray or torch.Tensor obj, but the rank can be 5 or 6
+                    seed    - The random seed which will be used to determine angle
+            Ret:    Rotated tensor
+        """
+        # Determine the rotation angle
+        is_tensor = tensor is torch.Tensor
+        if is_tensor:
+            tensor = tensor.numpy()
         rotate_degree = seed * 2 * self.degree - self.degree
-        return rotate(a_frame, rotate_degree), rotate(b_frame, rotate_degree)
+
+        if len(tensor.shape) == 5:
+            # Deal with rank=5 situation (BTCHW)
+            video_sequence = []
+            for batch in tensor:
+                video_sequence_batch = []
+                for frame in batch:
+                    video_sequence_batch.append(rotate(frame, rotate_degree))
+                video_sequence.append(np.asarray(video_sequence_batch))
+        elif len(tensor.shape) == 6:
+            # Deal with rank=6 situation (BTtCHW)
+            video_sequence = []
+            for batch in tensor:
+                video_sequence_batch = []
+                for _tuple in batch:
+                    tuple_list = []
+                    for frame in _tuple:
+                        tuple_list.append(rotate(frame, rotate_degree))
+                    video_sequence_batch.append(np.asarray(tuple_list))
+                video_sequence.append(np.asarray(video_sequence_batch))
+        else:
+            raise Exception("This function don't support the input whose rank is neither 5 nor 6...")
+
+        # Transfer back to torch.Tensor if needed
+        video_sequence = np.asarray(video_sequence)
+        if is_tensor:
+            video_sequence = torch.from_numpy(video_sequence)
+        return video_sequence
 
 class RandomHorizontallyFlip(object):
-    def __call__(self, a_frame, b_frame, seed):
-        if seed < 0.5:
-            return cv2.flip(a_frame, 0), cv2.flip(b_frame, 0)
-        return a_frame, b_frame
+    def __call__(self, tensor, seed):
+        if seed > 0.5:
+            return tensor
+        else:
+            is_tensor = tensor is torch.Tensor
+            if is_tensor:
+                tensor = tensor.numpy()
+
+            if len(tensor.shape) == 5:
+                # Deal with rank=5 situation (BTCHW)
+                video_sequence = []
+                for batch in tensor:
+                    video_sequence_batch = []
+                    for frame in batch:
+                        video_sequence_batch.append(cv2.flip(frame, 0))
+                    video_sequence.append(np.asarray(video_sequence_batch))
+            elif len(tensor.shape) == 6:
+                # Deal with rank=6 situation (BTtCHW)
+                video_sequence = []
+                for batch in tensor:
+                    video_sequence_batch = []
+                    for _tuple in batch:
+                        tuple_list = []
+                        for frame in _tuple:
+                            tuple_list.append(cv2.flip(frame, 0))
+                        video_sequence_batch.append(np.asarray(tuple_list))
+                    video_sequence.append(np.asarray(video_sequence_batch))
+            else:
+                raise Exception("This function don't support the input whose rank is neither 5 nor 6...")
+                
+        # Transfer back to torch.Tensor if needed
+        video_sequence = np.asarray(video_sequence)
+        if is_tensor:
+            video_sequence = torch.from_numpy(video_sequence)
+        return video_sequence

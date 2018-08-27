@@ -95,6 +95,8 @@ class ReCycleGAN(nn.Module):
                 3. recurrent loss
                 4. recycle loss
         """
+        # TODO: revise as rank=6 version updating
+        
         true_a_list = torch.chunk(self.true_a_seq, 3, dim = 0)
         true_b_list = torch.chunk(self.true_b_seq, 3, dim = 0)
         loss_D = 0

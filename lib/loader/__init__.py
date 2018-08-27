@@ -1,4 +1,4 @@
-from lib.loader.video_loader import *
+from lib.loader.video_loader2 import *
 from collections import Iterator
 
 class InfiniteLoader(Iterator):
@@ -36,7 +36,7 @@ def get_loader(name):
     """
     try:
         loader = {
-            'video': videoLoader,
+            'video': VideoDataset,
         }[name]
     except:
         INFO("The name of dataset [ %s ] is not support, you can choose one of them: [video]" % name)

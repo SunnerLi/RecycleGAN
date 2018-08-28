@@ -1,3 +1,5 @@
+from lib.utils import INFO
+import torch.nn.functional as F
 import numpy as np
 import random
 import torch
@@ -135,6 +137,10 @@ class ToTensor():
     def __call__(self, tensor):
         return torch.from_numpy(tensor)
 
+class ToFloat():
+    def __call__(self, tensor):
+        return tensor.float()
+
 class Transpose():
     def __init__(self, transfer_method = BHWC2BCHW):
         self.transfer_method = transfer_method
@@ -144,3 +150,20 @@ class Transpose():
             return tensor.transpose(-1, -2).transpose(-2, -3)
         else:
             return tensor.transpose(-2, -3).transpose(-1, -2)
+
+class Resize():
+    def __init__(self, size_tuple, use_cv = True):
+        self.size_tuple = size_tuple
+        self.use_cv = use_cv
+        INFO("You should be aware that the tensor rank should be BTCHW or BTtCHW")
+
+    def __call__(self, tensor_hd):
+        if len(tensor_hd.size()) == 4:
+            return F.interpolate(tensor_hd, size = [self.size_tuple[0], self.size_tuple[1]])
+        elif len(tensor_hd.size()) == 5:
+            tensor_list = [tensor.squeeze(1) for tensor in torch.chunk(tensor_hd, tensor_hd.size(1), dim = 1)]  # T * tCHW
+            result_tensor = []
+            for tensor in tensor_list:
+                result_tensor.append(F.interpolate(tensor, size = [self.size_tuple[0], self.size_tuple[1]]))
+            result_tensor = torch.stack(result_tensor, dim = 1)
+            return result_tensor

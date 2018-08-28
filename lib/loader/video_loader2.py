@@ -193,9 +193,9 @@ class VideoDataset(data.Dataset):
 
             # Transfer the object as torch.Tensor object
             if self.to_tensor:
-                if film_sequence is not torch.Tensor:
-                    tuple_list = torch.from_numpy(film_sequence)
-            result.append(tuple_list)
+                if type(film_sequence) is not torch.Tensor:
+                    film_sequence = torch.from_numpy(film_sequence)
+            result.append(film_sequence)
         return result
 
 if __name__ == '__main__':

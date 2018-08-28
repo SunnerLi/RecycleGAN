@@ -32,8 +32,8 @@ class ReCycleGAN(nn.Module):
             Set the input, and move to corresponding device
             * Notice: The stack object is the tensor, and rank format is TCHW (not tCHW)
         """
-        self.true_a_seq = true_a_seq
-        self.true_b_seq = true_b_seq
+        self.true_a_seq = true_a_seq.float()
+        self.true_b_seq = true_b_seq.float()
         self.true_a_seq = self.true_a_seq.to(device)
         self.true_b_seq = self.true_b_seq.to(device)
 
@@ -64,7 +64,7 @@ class ReCycleGAN(nn.Module):
         loss_G += (self.criterion_adv(fake_pred, True) + self.criterion_l2(fake_x_next, true_x_next) + self.criterion_l2(reco_x_next, true_x_next))
         return loss_G
 
-    def updateDiscriminator(self, true_x_stack, net_G, net_D, true_y, loss_D = 0.0):
+    def updateDiscriminator(self, true_x_tuple, net_G, net_D, true_y, loss_D = 0.0):
         """
             Update the discriminator loss for the given input tuple
             -----------------------------------------------------------------------------------
@@ -72,20 +72,31 @@ class ReCycleGAN(nn.Module):
             This mechanism can avoid accumulate the adv loss for duplicated times
             -----------------------------------------------------------------------------------
 
-            Arg:    true_x_stack    - The tuple tensor object in X domain, rank is tCHW
+            Arg:    true_x_stack    - The tuple tensor object in X domain, rank is BtCHW
                     net_G           - The generator (X -> Y)
                     net_D           - The discriminator (Y)
-                    true_y          - The last tensor object in Y domain, rank is 1CHW
+                    true_y          - The last tensor object in Y domain, rank is BtCHW
                     loss_D          - The discriminator loss, default is 0.0
             Ret:    1. The generated tuple tensor in Y domain, rank is TCHW
                     2. The fake prediction of last frame
                     3. Revised discriminator loss
         """
-        fake_y_stack = net_G(true_x_stack)
-        fake_pred = net_D(fake_y_stack[-1].clone())
-        true_pred = net_D(true_x_stack[-1].clone())
-        loss_D += self.criterion_adv(true_pred, True) + self.criterion_adv(fake_pred, False)
-        return fake_y_stack, fake_pred, loss_D
+        # fake_y_stack = net_G(true_x_stack)
+        # fake_pred = net_D(fake_y_stack[-1].clone())
+        # true_pred = net_D(true_x_stack[-1].clone())
+        # loss_D += self.criterion_adv(true_pred, True) + self.criterion_adv(fake_pred, False)
+        # return fake_y_stack, fake_pred, loss_D
+        center_idx = true_x_tuple.size(1) // 2
+        fake_y_stack = []
+
+        # Generate prediction frame by frame
+        true_x_frame_list = torch.chunk(true_x_tuple, self.t, dim = 1) # 3 * [1, 1, 720, 1080, 3]
+        assert self.t == true_x_tuple.size(1)
+        for true_x_frame in true_x_frame_list:
+            true_x_frame = true_x_frame.squeeze(1) # [1, 720, 1080, 1]
+            print('true_x_frame size: ', true_x_frame.size())
+            fake_y_stack.append(net_G(true_x_frame))
+        fake_y_stack = torch.cat(fake_y_stack, dim = 1)
 
     def backward(self):
         """
@@ -96,27 +107,46 @@ class ReCycleGAN(nn.Module):
                 4. recycle loss
         """
         # TODO: revise as rank=6 version updating
-        
-        true_a_list = torch.chunk(self.true_a_seq, 3, dim = 0)
-        true_b_list = torch.chunk(self.true_b_seq, 3, dim = 0)
+        # [1, 10, 3, 720, 1080, 3]
+
+        # print("true_a_seq size: ", self.true_a_seq.size())
+
+        true_a_tuple_list = torch.chunk(self.true_a_seq, self.T, dim = 1) # 10 * [1, 1, 3, 720, 1080, 3]
+        true_b_tuple_list = torch.chunk(self.true_b_seq, self.T, dim = 1)
         loss_D = 0
         loss_G = 0
+        # print(true_a_tuple_list[0].size())
+        for true_a_tuple, true_b_tuple in zip(true_a_tuple_list, true_b_tuple_list):
+            true_a_tuple = torch.squeeze(true_a_tuple, dim = 1) # [1, 3, 720, 1080, 3]
+            true_b_tuple = torch.squeeze(true_b_tuple, dim = 1) # [1, 3, 720, 1080, 3]
+            fake_b_stack, fake_pred, loss_D = self.updateDiscriminator(true_a_tuple, self.G_A_to_B, self.D_B, true_b_tuple, loss_D)
+            loss_G = self.updateGenerator(true_a_tuple, fake_b_stack, self.P_A, self.P_B, self.G_B_to_A, self.D_B, true_a_list[i], fake_pred, loss_G)
+            fake_a_stack, fake_pred, loss_D = self.updateDiscriminator(true_b_tuple, self.G_B_to_A, self.D_A, true_a_list[i-1], loss_D)
+            loss_G = self.updateGenerator(true_b_tuple, fake_a_stack, self.P_B, self.P_A, self.G_A_to_B, self.D_A, true_b_list[i], fake_pred, loss_G)
 
-        # Accumulate for ((T-t)/t+1) step
-        for i in range(self.t, self.T, 1):
-            true_a_stack = torch.cat(true_a_list[i-self.t : i], dim = 0)
-            true_b_stack = torch.cat(true_b_list[i-self.t : i], dim = 0)
-            fake_b_stack, fake_pred, loss_D = self.updateDiscriminator(true_a_stack, self.G_A_to_B, self.D_B, true_b_list[i-1], loss_D)
-            loss_G = self.updateGenerator(true_a_stack, fake_b_stack, self.P_A, self.P_B, self.G_B_to_A, self.D_B, true_a_list[i], fake_pred, loss_G)
-            fake_a_stack, fake_pred, loss_D = self.updateDiscriminator(true_b_stack, self.G_B_to_A, self.D_A, true_a_list[i-1], loss_D)
-            loss_G = self.updateGenerator(true_b_stack, fake_a_stack, self.P_B, self.P_A, self.G_A_to_B, self.D_A, true_b_list[i], fake_pred, loss_G)            
 
-        # Update discriminator
-        self.optim_D.zero_grad()
-        loss_D.backward()
-        self.optim_D.step()
 
-        # Update generator
-        self.optim_G.zero_grad()
-        loss_G.backward()
-        self.optim_G.step()
+        
+        # true_a_list = torch.chunk(self.true_a_seq, 3, dim = 0)
+        # true_b_list = torch.chunk(self.true_b_seq, 3, dim = 0)
+        # loss_D = 0
+        # loss_G = 0
+
+        # # Accumulate for ((T-t)/t+1) step
+        # for i in range(self.t, self.T, 1):
+        #     true_a_stack = torch.cat(true_a_list[i-self.t : i], dim = 0)
+        #     true_b_stack = torch.cat(true_b_list[i-self.t : i], dim = 0)
+        #     fake_b_stack, fake_pred, loss_D = self.updateDiscriminator(true_a_stack, self.G_A_to_B, self.D_B, true_b_list[i-1], loss_D)
+        #     loss_G = self.updateGenerator(true_a_stack, fake_b_stack, self.P_A, self.P_B, self.G_B_to_A, self.D_B, true_a_list[i], fake_pred, loss_G)
+        #     fake_a_stack, fake_pred, loss_D = self.updateDiscriminator(true_b_stack, self.G_B_to_A, self.D_A, true_a_list[i-1], loss_D)
+        #     loss_G = self.updateGenerator(true_b_stack, fake_a_stack, self.P_B, self.P_A, self.G_A_to_B, self.D_A, true_b_list[i], fake_pred, loss_G)            
+
+        # # Update discriminator
+        # self.optim_D.zero_grad()
+        # loss_D.backward()
+        # self.optim_D.step()
+
+        # # Update generator
+        # self.optim_G.zero_grad()
+        # loss_G.backward()
+        # self.optim_G.step()

@@ -1,6 +1,6 @@
 from lib.loader import get_loader, InfiniteLoader
 from lib.model.recycle_gan import ReCycleGAN
-from lib.augmentations import *
+import lib.augmentations as aug
 
 from parse import parse_train_args
 
@@ -15,9 +15,11 @@ def train(args):
         loader = data.DataLoader(
             dataset = get_loader(args.dataset)(
                 root = [args.A, args.B], 
-                transform = Compose([
-                    RandomRotate(10),
-                    RandomHorizontallyFlip()
+                transform = aug.Compose([
+                    aug.RandomRotate(10),
+                    aug.RandomHorizontallyFlip(),
+                    aug.ToTensor(),
+                    aug.Transpose(aug.BHWC2BCHW)
                 ]), 
                 T = 10, 
                 t = 3,
@@ -27,7 +29,7 @@ def train(args):
     )
 
     # Create the model
-    model = ReCycleGAN(A_channel = args.A_channel, B_channel = args.B_channel, r = args.r).to(args.device)    
+    model = ReCycleGAN(A_channel = args.A_channel, B_channel = args.B_channel, r = args.r, t = 3).to(args.device)    
     for video_a, video_b in loader:
         model.setInput(video_a, video_b, device = args.device)
         model.backward()

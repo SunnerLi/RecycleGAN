@@ -6,10 +6,13 @@ import subprocess
 import argparse
 import random
 import torch
+import math
 import os
 
 down_sample = 0
 over_sample = 1
+with_tuple_form = 0
+without_tuple_form = 1
 
 def _domain2folder(domain):
     domain_list = domain.split('/')
@@ -40,7 +43,7 @@ def to_folder(name):
         return '_'.join(name.split('.')[:-1])    
 
 class VideoDataset(data.Dataset):
-    def __init__(self, root, transform = None, T = 10, t = None, 
+    def __init__(self, root, transform = None, T = 10, t = 3, rank_form = without_tuple_form,
                     use_cv = False, decode_root = './decode', sample_method = down_sample, to_tensor = True):
         """
             The video version of ImageDataset, and the rank of return tensor is BTCHW
@@ -86,6 +89,8 @@ class VideoDataset(data.Dataset):
         self.transform = transform
         self.T = T
         self.t = t
+        self.T_ext = self.T + math.ceil(self.t / 2)
+        self.rank_form = rank_form
         self.use_cv = use_cv
         self.decode_root = decode_root
         self.sample_method = sample_method
@@ -157,10 +162,10 @@ class VideoDataset(data.Dataset):
         result = []
         for domain in self.root:
             film_sequence = []
-            max_init_frame_idx = len(self.frames[to_folder(domain)][index]) - self.T - 1
-            if self.t is None:
+            if self.rank_form == without_tuple_form:
+                max_init_frame_idx = len(self.frames[to_folder(domain)][index]) - self.T_ext
                 start_pos = random.randint(0, max_init_frame_idx)
-                for i in range(self.T):
+                for i in range(self.T_ext):
                     img_path = self.frames[to_folder(domain)][index][start_pos + i]
                     if self.use_cv:
                         import cv2
@@ -170,6 +175,7 @@ class VideoDataset(data.Dataset):
                         img = np.asarray(Image.open(img_path))
                     film_sequence.append(img)
             else:
+                max_init_frame_idx = len(self.frames[to_folder(domain)][index]) - self.T
                 start_pos = random.randint(self.t // 2, max_init_frame_idx)
                 for i in range(self.T):
                     film_tuple = []

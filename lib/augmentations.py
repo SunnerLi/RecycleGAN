@@ -41,12 +41,6 @@ class Compose(object):
         for aug_op in self.augmentations:
             video_sequence = aug_op(video_sequence)
         return video_sequence
-
-# class TensorOP(object):
-#     def work(self):
-#         raise NotImplementedError("")
-
-#     def __call__(self):
         
 class RandomRotate(object):
     def __init__(self, degree):
@@ -59,7 +53,7 @@ class RandomRotate(object):
             Arg:    tensor  - The np.ndarray or torch.Tensor obj, but the rank can be 5 or 6
                     seed    - The random seed which will be used to determine angle
             Ret:    Rotated tensor
-        """
+        """       
         # Determine the rotation angle
         seed = random.random()
         is_tensor = tensor is torch.Tensor
@@ -67,25 +61,19 @@ class RandomRotate(object):
             tensor = tensor.numpy()
         rotate_degree = seed * 2 * self.degree - self.degree
 
-        if len(tensor.shape) == 5:
+        if len(tensor.shape) == 4:
             # Deal with rank=5 situation (BTCHW)
             video_sequence = []
-            for batch in tensor:
-                video_sequence_batch = []
-                for frame in batch:
-                    video_sequence_batch.append(rotate(frame, rotate_degree))
-                video_sequence.append(np.asarray(video_sequence_batch))
-        elif len(tensor.shape) == 6:
+            for frame in tensor:
+                video_sequence.append(rotate(frame, rotate_degree))
+        elif len(tensor.shape) == 5:
             # Deal with rank=6 situation (BTtCHW)
             video_sequence = []
-            for batch in tensor:
-                video_sequence_batch = []
-                for _tuple in batch:
-                    tuple_list = []
-                    for frame in _tuple:
-                        tuple_list.append(rotate(frame, rotate_degree))
-                    video_sequence_batch.append(np.asarray(tuple_list))
-                video_sequence.append(np.asarray(video_sequence_batch))
+            for _tuple in tensor:
+                tuple_list = []
+                for frame in _tuple:
+                    tuple_list.append(rotate(frame, rotate_degree))
+                video_sequence.append(np.asarray(tuple_list))
         else:
             raise Exception("This function don't support the input whose rank is neither 5 nor 6...")
 
@@ -105,27 +93,21 @@ class RandomHorizontallyFlip(object):
             if is_tensor:
                 tensor = tensor.numpy()
 
-            if len(tensor.shape) == 5:
+            if len(tensor.shape) == 4:
                 # Deal with rank=5 situation (BTCHW)
                 video_sequence = []
-                for batch in tensor:
-                    video_sequence_batch = []
-                    for frame in batch:
-                        video_sequence_batch.append(cv2.flip(frame, 0))
-                    video_sequence.append(np.asarray(video_sequence_batch))
-            elif len(tensor.shape) == 6:
+                for frame in tensor:
+                    video_sequence.append(cv2.flip(frame, 0))
+            elif len(tensor.shape) == 5:
                 # Deal with rank=6 situation (BTtCHW)
                 video_sequence = []
-                for batch in tensor:
-                    video_sequence_batch = []
-                    for _tuple in batch:
-                        tuple_list = []
-                        for frame in _tuple:
-                            tuple_list.append(cv2.flip(frame, 0))
-                        video_sequence_batch.append(np.asarray(tuple_list))
-                    video_sequence.append(np.asarray(video_sequence_batch))
+                for _tuple in tensor:
+                    tuple_list = []
+                    for frame in _tuple:
+                        tuple_list.append(cv2.flip(frame, 0))
+                    video_sequence.append(np.asarray(tuple_list))
             else:
-                raise Exception("This function don't support the input whose rank is neither 5 nor 6...")
+                raise Exception("This function don't support the input whose rank is neither 4 nor 5...")
                 
         # Transfer back to torch.Tensor if needed
         video_sequence = np.asarray(video_sequence)
@@ -167,3 +149,5 @@ class Resize():
                 result_tensor.append(F.interpolate(tensor, size = [self.size_tuple[0], self.size_tuple[1]]))
             result_tensor = torch.stack(result_tensor, dim = 1)
             return result_tensor
+
+# TODO: Add normalize augmentation

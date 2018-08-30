@@ -8,18 +8,19 @@ from torch.optim import Adam
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
+import math
 
 import itertools
 
 """
-    This script define the ReCycleGAN with the approach whose rank=5
+    This script define the ReCycleGAN with the approach whose rank=6
 """
 
 class ReCycleGAN(nn.Module):
     def __init__(self, A_channel = 3, B_channel = 3, r = 1, t = 2, T = 30):
         super().__init__()
         self.t = t
-        self.T = T
+        self.T = T + math.ceil(t / 2)
         self.loss_G = 0.0
         self.loss_D = 0.0
         self.G_A_to_B = SpatialTranslationModel(n_in = A_channel, n_out = B_channel, r = r)
@@ -46,8 +47,50 @@ class ReCycleGAN(nn.Module):
     def forward(self, warning = True):
         if warning:
             INFO("This function can be called during inference, you should call <backward> function to update the model!")
+        
+    def validate(self):
+        """
+            Render for the first image
 
-    def updateGenerator(self, true_x_tuple, fake_y_tuple, fake_pred, P_X, P_Y, net_G, net_D):
+            You should notice the index!
+            For example, if self.t is 3, then it represent that we consider the front 2 image, and predict for the 3rd frame
+            So the tuple index is 0~2 which means tuple[:self.t - 1]
+            Also, the 3rd frame index is 2 which also means tuple[self.t - 1]
+        """       
+        # BTCHW -> T * BCHW
+        true_a_seq = [frame.squeeze(1) for frame in torch.chunk(self.true_a_seq, self.true_a_seq.size(1), dim = 1)]
+        true_b_seq = [frame.squeeze(1) for frame in torch.chunk(self.true_b_seq, self.true_b_seq.size(1), dim = 1)]
+        
+        # Form the input frame in original domain
+        true_a = true_a_seq[self.t - 1]
+        true_b = true_b_seq[self.t - 1]
+
+        # Form the tuple to generate the image in opposite domain
+        fake_a_tuple = []
+        fake_b_tuple = []
+        for i in range(self.t - 1):
+            fake_a_tuple.append(self.G_B_to_A(true_b_seq[i]))
+            fake_b_tuple.append(self.G_A_to_B(true_a_seq[i]))
+        fake_a_tuple = torch.cat(fake_a_tuple, dim = 1)
+        fake_b_tuple = torch.cat(fake_b_tuple, dim = 1)
+        true_a_tuple = torch.cat(true_a_seq[self.t - 1], dim = 1)
+        true_b_tuple = torch.cat(true_b_seq[self.t - 1], dim = 1)
+
+        # Generate
+        fake_b = 0.5 * (self.G_A_to_B(true_a) + self.P_B(fake_b_tuple))
+        reco_a = 0.5 * (self.G_B_to_A(self.P_B(fake_b_tuple)) + self.P_A(true_a_tuple))
+        fake_a = 0.5 * (self.G_B_to_A(true_b) + self.P_A(fake_a_tuple))
+        reco_b = 0.5 * (self.G_A_to_B(self.P_A(fake_a_tuple)) + self.P_B(true_b_tuple))
+        return {
+            'true_a': true_a,
+            'fake_b': fake_b,
+            'reco_a': reco_a,
+            'true_b': true_b,
+            'fake_a': fake_a,
+            'reco_b': reco_b
+        }
+
+    def updateGenerator(self, true_x_tuple, fake_y_tuple, true_x_next, fake_pred, P_X, P_Y, net_G, net_D):
         """
             Update the generator for the given tuples in both domain
             -----------------------------------------------------------------------------------
@@ -63,18 +106,11 @@ class ReCycleGAN(nn.Module):
                     net_D           - The discriminator (Y)
             Ret:    The generator loss
         """
-        # Get the tuple expect the last frame (future frame)
-        true_x_tuple = torch.chunk(true_x_tuple, self.t, dim = 1)   # t * B1CHW
-        true_x_tuple = [frame.squeeze(1) for frame in true_x_tuple] # t * BCHW
-        true_x_next  = true_x_tuple[-1]
-        true_x_tuple = torch.cat(true_x_tuple[:-1], dim = 1)
-
-        # Form next frame by temporal prediction
         fake_x_next = P_X(true_x_tuple)
         reco_x_next = net_G(P_Y(fake_y_tuple))
         self.loss_G += (self.criterion_adv(fake_pred, True) + self.criterion_l2(fake_x_next, true_x_next) + self.criterion_l2(reco_x_next, true_x_next))
 
-    def updateDiscriminator(self, true_x_tuple, true_y_tuple, net_G, net_D):
+    def updateDiscriminator(self, fake_frame, true_frame, net_D):
         """
             Update the discriminator loss for the given input tuple
             -----------------------------------------------------------------------------------
@@ -91,28 +127,10 @@ class ReCycleGAN(nn.Module):
                     2. The fake prediction of last frame
                     3. Revised discriminator loss
         """
-        # Split as frame list and initialize the parameters
-        true_x_frame_list = torch.chunk(true_x_tuple, self.t, dim = 1) # t * B1CHW
-        true_y_frame_list = torch.chunk(true_y_tuple, self.t, dim = 1) # t * B1CHW
-        assert self.t == true_x_tuple.size(1)
-        center_idx = true_x_tuple.size(1) // 2
-        fake_y_stack = []
-
-        # Generate prediction frame by frame
-        for i in range(len(true_x_frame_list) - 1):
-            true_x_frame = true_x_frame_list[i].squeeze(1)  # BCHW
-            fake_y_stack.append(net_G(true_x_frame))
-
-        # Accumulate adversarial loss
-        true_y_frame = true_y_frame_list[center_idx].clone().squeeze(1)  # BCHW
-        fake_y_frame = fake_y_stack[center_idx].clone()
-        fake_pred = net_D(fake_y_frame)
-        true_pred = net_D(true_y_frame)
+        fake_pred = net_D(fake_frame)
+        true_pred = net_D(true_frame)
         self.loss_D += self.criterion_adv(true_pred, True) + self.criterion_adv(fake_pred, False)
-
-        # Return
-        fake_y_stack = torch.cat(fake_y_stack, dim = 1)
-        return fake_y_stack, fake_pred
+        return fake_pred
 
     def backward(self):
         """
@@ -121,23 +139,29 @@ class ReCycleGAN(nn.Module):
                 1. adversarial loss
                 3. recurrent loss
                 4. recycle loss
-        """
-        # TODO: Revise as rank=5 approach (hope can save memory usage)
-        
-        true_a_tuple_list = torch.chunk(self.true_a_seq, self.T, dim = 1) # 10 * [1, 1, 3, 720, 1080, 3]
-        true_b_tuple_list = torch.chunk(self.true_b_seq, self.T, dim = 1)
+        """       
+        true_a_frame_list = [frame.squeeze(1) for frame in torch.chunk(self.true_a_seq, self.T, dim = 1)] # 10 * [1, 3, 720, 1080]
+        true_b_frame_list = [frame.squeeze(1) for frame in torch.chunk(self.true_b_seq, self.T, dim = 1)]
         self.loss_D = 0
         self.loss_G = 0
-        for true_a_tuple, true_b_tuple in zip(true_a_tuple_list, true_b_tuple_list):
-            # Form the input tensor in single time step
-            true_a_tuple = torch.squeeze(true_a_tuple, dim = 1) # [1, 3, 720, 1080, 3]
-            true_b_tuple = torch.squeeze(true_b_tuple, dim = 1) # [1, 3, 720, 1080, 3]
 
-            # Compute loss
-            fake_b_stack, fake_pred = self.updateDiscriminator(true_a_tuple, true_b_tuple, self.G_A_to_B, self.D_B)
-            self.updateGenerator(true_a_tuple, fake_b_stack, fake_pred, self.P_A, self.P_B, self.G_B_to_A, self.D_B)
-            fake_a_stack, fake_pred = self.updateDiscriminator(true_b_tuple, true_a_tuple, self.G_B_to_A, self.D_A)
-            self.updateGenerator(true_b_tuple, fake_a_stack, fake_pred, self.P_B, self.P_A, self.G_A_to_B, self.D_A)
+        # Generate fake_tuple in opposite domain
+        fake_b_frame_list = []
+        fake_a_frame_list = []
+        for i in range(self.T):
+            fake_b_frame_list.append(self.G_A_to_B(true_a_frame_list[i]))
+            fake_a_frame_list.append(self.G_B_to_A(true_b_frame_list[i]))
+
+        for i in range(self.T):
+            fake_b_pred = self.updateDiscriminator(fake_b_frame_list[i], true_a_frame_list[i], self.D_B)
+            fake_a_pred = self.updateDiscriminator(fake_a_frame_list[i], true_b_frame_list[i], self.D_A)
+            if i < self.T - self.t + 1:
+                true_a_tuple = torch.cat(true_a_frame_list[i : i + self.t - 1], dim = 1)
+                true_b_tuple = torch.cat(true_b_frame_list[i : i + self.t - 1], dim = 1)
+                fake_a_tuple = torch.cat(fake_a_frame_list[i : i + self.t - 1], dim = 1)
+                fake_b_tuple = torch.cat(fake_b_frame_list[i : i + self.t - 1], dim = 1)
+                self.updateGenerator(true_a_tuple, fake_b_tuple, true_a_frame_list[i + self.t - 1], fake_b_pred, self.P_A, self.P_B, self.G_B_to_A, self.D_B)
+                self.updateGenerator(true_b_tuple, fake_a_tuple, true_b_frame_list[i + self.t - 1], fake_a_pred, self.P_B, self.P_A, self.G_A_to_B, self.D_A)           
 
         # Update discriminator
         self.optim_D.zero_grad()

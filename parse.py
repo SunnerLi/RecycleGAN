@@ -32,6 +32,7 @@ def parse_train_args():
             --W                 : The width of image, default is 480
             --r                 : The ratio of channel you want to reduce, default is 4
             --n_iter            : Total iteration, default is 1 (30000 is recommand)
+            --record_iter       : The period to record the render image and model parameters
 
         <temporal>
             --t                 : The length of tuple in a single sequence
@@ -61,6 +62,7 @@ def parse_train_args():
     parser.add_argument('--W'              , type = int, default = 224)
     parser.add_argument('--r'              , type = int, default = 4)
     parser.add_argument('--n_iter'         , type = int, default = 1)
+    parser.add_argument('--record_iter'    , type = int, default = 1)
     # temporal
     parser.add_argument('--t'              , type = int, default = 2)
     parser.add_argument('--T'              , type = int, default = 30)

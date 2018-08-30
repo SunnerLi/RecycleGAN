@@ -28,6 +28,9 @@ class InfiniteLoader(Iterator):
             print()
             raise StopIteration()
 
+    def __len__(self):
+        return self.max_iter
+
 def get_loader(name):
     """
         Return the corresponding data loader object

@@ -17,10 +17,11 @@ import itertools
 """
 
 class ReCycleGAN(nn.Module):
-    def __init__(self, A_channel = 3, B_channel = 3, r = 1, t = 2, T = 30):
+    def __init__(self, A_channel = 3, B_channel = 3, r = 1, t = 2, T = 30, device = 'cpu'):
         super().__init__()
         self.t = t
         self.T = T + math.ceil(t / 2)
+        self.device = device
         self.loss_G = 0.0
         self.loss_D = 0.0
         self.G_A_to_B = SpatialTranslationModel(n_in = A_channel, n_out = B_channel, r = r)
@@ -33,39 +34,28 @@ class ReCycleGAN(nn.Module):
         self.criterion_l2 = nn.MSELoss()
         self.optim_G = Adam(itertools.chain(self.G_A_to_B.parameters(), self.G_B_to_A.parameters(), self.P_A.parameters(), self.P_B.parameters()), lr = 0.001)
         self.optim_D = Adam(itertools.chain(self.D_A.parameters(), self.D_B.parameters()), lr = 0.001)
+        self.to(self.device)
 
-    def setInput(self, true_a_seq, true_b_seq, device = 'cpu'):
+    def setInput(self, true_a_seq, true_b_seq):
         """
             Set the input, and move to corresponding device
             * Notice: The stack object is the tensor, and rank format is TCHW (not tCHW)
         """
         self.true_a_seq = true_a_seq.float()
         self.true_b_seq = true_b_seq.float()
-        self.true_a_seq = self.true_a_seq.to(device)
-        self.true_b_seq = self.true_b_seq.to(device)
+        self.true_a_seq = self.true_a_seq.to(self.device)
+        self.true_b_seq = self.true_b_seq.to(self.device)
 
-    def forward(self, warning = True):
+    def forward(self, true_a = None, true_b = None, true_a_seq = None, true_b_seq = None, warning = True):
+        """
+            The usual forward process of the Re-cycleGAN
+            * You should notice that the tensor should move to device previously!!!!!
+        """
+        # Warn the user not to call this function during training
         if warning:
             INFO("This function can be called during inference, you should call <backward> function to update the model!")
-        
-    def validate(self):
-        """
-            Render for the first image
 
-            You should notice the index!
-            For example, if self.t is 3, then it represent that we consider the front 2 image, and predict for the 3rd frame
-            So the tuple index is 0~2 which means tuple[:self.t - 1]
-            Also, the 3rd frame index is 2 which also means tuple[self.t - 1]
-        """       
-        # BTCHW -> T * BCHW
-        true_a_seq = [frame.squeeze(1) for frame in torch.chunk(self.true_a_seq, self.true_a_seq.size(1), dim = 1)]
-        true_b_seq = [frame.squeeze(1) for frame in torch.chunk(self.true_b_seq, self.true_b_seq.size(1), dim = 1)]
-        
-        # Form the input frame in original domain
-        true_a = true_a_seq[self.t - 1]
-        true_b = true_b_seq[self.t - 1]
-
-        # Form the tuple to generate the image in opposite domain
+        # Get the tuple object before proceeding temporal predictor
         fake_a_tuple = []
         fake_b_tuple = []
         for i in range(self.t - 1):
@@ -73,8 +63,10 @@ class ReCycleGAN(nn.Module):
             fake_b_tuple.append(self.G_A_to_B(true_a_seq[i]))
         fake_a_tuple = torch.cat(fake_a_tuple, dim = 1)
         fake_b_tuple = torch.cat(fake_b_tuple, dim = 1)
-        true_a_tuple = torch.cat(true_a_seq[self.t - 1], dim = 1)
-        true_b_tuple = torch.cat(true_b_seq[self.t - 1], dim = 1)
+        true_a_tuple = torch.cat(true_a_seq, dim = 1)
+        true_b_tuple = torch.cat(true_b_seq, dim = 1)
+        true_a = true_a
+        true_b = true_b
 
         # Generate
         fake_b = 0.5 * (self.G_A_to_B(true_a) + self.P_B(fake_b_tuple))
@@ -89,6 +81,28 @@ class ReCycleGAN(nn.Module):
             'fake_a': fake_a,
             'reco_b': reco_b
         }
+        
+    # def validate(self):
+    #     """
+    #         Render for the first image
+
+    #         You should notice the index!
+    #         For example, if self.t is 3, then it represent that we consider the front 2 image, and predict for the 3rd frame
+    #         So the tuple index is 0~2 which means tuple[:self.t - 1]
+    #         Also, the 3rd frame index is 2 which also means tuple[self.t - 1]
+    #     """
+    #     # BTCHW -> T * BCHW
+    #     true_a_seq = [frame.squeeze(1) for frame in torch.chunk(self.true_a_seq, self.true_a_seq.size(1), dim = 1)]
+    #     true_b_seq = [frame.squeeze(1) for frame in torch.chunk(self.true_b_seq, self.true_b_seq.size(1), dim = 1)]
+        
+    #     # Form the input frame in original domain
+    #     true_a = true_a_seq[self.t - 1]
+    #     true_b = true_b_seq[self.t - 1]
+
+    #     # Form the tuple to generate the image in opposite domain
+    #     true_a_tuple = torch.cat(true_a_seq[:self.t - 1], dim = 1)
+    #     true_b_tuple = torch.cat(true_b_seq[:self.t - 1], dim = 1)
+    #     return self.forward(true_a, true_b, true_a_tuple, true_b_tuple)
 
     def updateGenerator(self, true_x_tuple, fake_y_tuple, true_x_next, fake_pred, P_X, P_Y, net_G, net_D):
         """
@@ -108,7 +122,10 @@ class ReCycleGAN(nn.Module):
         """
         fake_x_next = P_X(true_x_tuple)
         reco_x_next = net_G(P_Y(fake_y_tuple))
-        self.loss_G += (self.criterion_adv(fake_pred, True) + self.criterion_l2(fake_x_next, true_x_next) + self.criterion_l2(reco_x_next, true_x_next))
+        self.loss_G += (self.criterion_adv(fake_pred, True) + 
+            10 * self.criterion_l2(fake_x_next, true_x_next) + 
+            10 * self.criterion_l2(reco_x_next, true_x_next)
+        )
 
     def updateDiscriminator(self, fake_frame, true_frame, net_D):
         """

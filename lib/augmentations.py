@@ -23,9 +23,16 @@ def rotate(image, angle, center=None, scale=1.0):
     rotated = cv2.warpAffine(image, M, (w, h))
     return rotated
 
-# ===========================================================
-# TODO: Add transpose augmentation
-# ===========================================================
+# =======================================================================================================
+# The augmentation operators we define includes:
+#   1. random rotate
+#   2. random horizontally flip
+#   3. to tensor
+#   4. to float
+#   5. transpose
+#   6. resize
+#   7. normalize
+# =======================================================================================================
 
 class Compose(object):
     def __init__(self, augmentations):
@@ -150,4 +157,8 @@ class Resize():
             result_tensor = torch.stack(result_tensor, dim = 1)
             return result_tensor
 
-# TODO: Add normalize augmentation
+class Normalize():
+    def __call__(self, tensor):
+        tensor = (tensor - 127.5) / 127.5
+        assert (torch.min(tensor) >= -1) and (torch.max(tensor) <= 1)
+        return tensor

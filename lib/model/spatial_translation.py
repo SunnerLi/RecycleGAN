@@ -1,3 +1,4 @@
+import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
 import torch
@@ -49,6 +50,7 @@ class SpatialTranslationModel(nn.Module):
         y = self.relu(self.in4(self.deconv1(y)))
         y = self.relu(self.in5(self.deconv2(y)))
         y = self.deconv3(y)
+        y = torch.tanh(y)
         return y
 
 

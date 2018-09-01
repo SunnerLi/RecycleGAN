@@ -137,8 +137,8 @@ class VideoDataset(data.Dataset):
                 os.mkdir(os.path.join(self.decode_root, to_folder(domain), to_folder(video)))
                 source = os.path.join(domain, video)
                 target = os.path.join(self.decode_root, to_folder(domain), to_folder(video), "%5d.png")
-                # subprocess.call(['ffmpeg', '-i', source, '-vframes', str(10), target])
-                subprocess.call(['ffmpeg', '-i', source, target])
+                subprocess.call(['ffmpeg', '-i', source, '-vframes', str(100), target])
+                # subprocess.call(['ffmpeg', '-i', source, target])
 
     def __len__(self):
         """

@@ -85,7 +85,7 @@ def train(args):
         # Update parameters
         model.setInput(video_a, video_b)
         model.backward()
-        bar.set_description("G: " + str(model.loss_G.item()) + " D: " + str(model.loss_D.item()))
+        bar.set_description("G: " + str(model.loss_G) + " D: " + str(model.loss_D) + " P: " + str(model.loss_P))
         bar.refresh()
 
         # Record render result

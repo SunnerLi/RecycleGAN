@@ -1,156 +1,218 @@
-from torch.utils import data
-from lib.utils import INFO
+from addict import Dict
 from glob import glob
-from tqdm import tqdm
+import torch.utils.data as data
 import numpy as np
 import subprocess
+import argparse
+import random
 import torch
-import cv2
+import math
 import os
 
-"""
-    This script define the loader to deal with video data.
-    We treat each video as single folder, and each folder contains bunch of images (frame)
-    Since it is time consuming to decode and encode the video by OpenCV,
-    we adopt ffmpeg to deal with this work
+down_sample = 0
+over_sample = 1
+with_tuple_form = 0
+without_tuple_form = 1
 
-    You should install the ffmpeg by the cmd: 
-    $ sudo apt install ffmpeg
-"""
+def _domain2folder(domain):
+    domain_list = domain.split('/')
+    while True:
+        if '.' in domain_list:
+            domain_list.remove('.')
+        elif '..' in domain_list:
+            domain_list.remove('..')
+        else:
+            break
+    return '_'.join(domain_list)       
 
-class videoLoader(data.Dataset):
-    """
-        nearest explain
-    """
-    def __init__(self, A_root, B_root, img_size = None, t = 2, T = 30, augmentations = None, temp_folder = './decode/'):
+def _file2folder(file_name):
+    return '_'.join(file_name.split('.')[:-1])
+
+def to_folder(name):
+    if os.path.isdir(name):
+        domain_list = name.split('/')
+        while True:
+            if '.' in domain_list:
+                domain_list.remove('.')
+            elif '..' in domain_list:
+                domain_list.remove('..')
+            else:
+                break
+        return '_'.join(domain_list)
+    else:
+        return '_'.join(name.split('.')[:-1])    
+
+class VideoDataset(data.Dataset):
+    def __init__(self, root, transform = None, T = 10, t = 2, rank_form = without_tuple_form,
+                    use_cv = False, decode_root = './.decode', sample_method = down_sample, to_tensor = True):
         """
+            The video version of ImageDataset, and the rank of return tensor is BTCHW
+            If you assign t, then the rank of return tensor is BTtCHW
+            Some notation are defined in the following:
+                * Video : The image sequence, and the length of video is various and large
+                * Tuple : The small image sequence, and the length of tuple is T
+
+            Code notation:
+                * root          : The list object
+                                  The each "domain" can be obtained by accessing the list iteratively
+                                  For example, ['./video/A', './video/B']
+                * domain        : The str object
+                                  The each "video" can be obtained
+                                  For example, './video/A'
+                * decode_root   : The str
+                                  For example, '.decode'
+                * decode_domain : The str which is transferred from "domain". 
+                                  For example, 'video_A'
+
++-----------+----------------------------------+------------------------------------------+----------------------------------+-----------------------------+
+|   Name    |           Operation1             |        Return after Operation1           |         Operation2               |    Return after Operation2  |
++-----------+----------------------------------+------------------------------------------+----------------------------------+-----------------------------+
+|   root    |   Access the list iteratively    |                domain                    |             -                    |       -                     | 
++-----------+----------------------------------+------------------------------------------+----------------------------------+-----------------------------+            
+|  domain   |     to_folder(domain)            |  the domain folder name after decoding   |       os.listdir(domain)         |       video                 |     
++-----------+----------------------------------+------------------------------------------+----------------------------------+-----------------------------+
+|   video   |     to_folder(video)             |  the video folder name after decoding    |    os.listdir(self.decode_root,  |       frame                 |     
+|           |                                  |                                          |                to_folder(domain),|                             |         
+|           |                                  |                                          |                to_folder(video)  |                             |     
+|           |                                  |                                          |    )                             |                             |     
++-----------+----------------------------------+------------------------------------------+----------------------------------+-----------------------------+
+|   frame   |               -                  |                   -                      |             -                    |        -                    |
++-----------+----------------------------------+------------------------------------------+----------------------------------+-----------------------------+
+
+            Arg:    root            - The list of different video folder
+                    transform       - The transform.Compose object
+                    decode_folder   - The temporal folder to store the decoded image
+                    T               - The maximun image in single batch sequence
         """
-        # Record the parameters
-        self.A_root = A_root
-        self.B_root = B_root
-        self.img_size = img_size
+        # Record the variable
+        self.root = root
+        self.transform = transform
         self.T = T
-        self.augmentations = augmentations
-        self.temp_folder = temp_folder
+        self.t = t
+        self.T_ext = self.T + self.t        # the number of frame in each batch.
+        self.rank_form = rank_form
+        self.use_cv = use_cv
+        self.decode_root = decode_root
+        self.sample_method = sample_method
+        self.to_tensor = to_tensor
+        self._len = None
 
-        # -------------------------------------------------------------------------------------------
-        # Decode the videos
-        # There are two cases that the videos will be decoded again:
-        #   1. The temp folder is not exist
-        #   2. The folder with video name is missing
-        # Before decoding the video, the temp folder will be removed completely if the folder is exist
-        # 
-        # ref: https://stackoverflow.com/questions/35771821/ffmpeg-decoding-mp4-video-file
-        # -------------------------------------------------------------------------------------------
-        should_decode = not os.path.exists(temp_folder)
+        # Obtain the list of video list
+        self.video_files = {}
+        for domain in self.root:
+            self.video_files[domain] = os.listdir(domain)
+
+        # Check if the decode process should be conducted again
+        should_decode = not os.path.exists(self.decode_root)
         if not should_decode:
-            for video_name in os.listdir(self.A_root):
-                if not os.path.exists(os.path.join(temp_folder, video_name)) and not should_decode:
-                    should_decode = True
-                    break
-            for video_name in os.listdir(self.B_root):
-                if not os.path.exists(os.path.join(temp_folder, video_name)) and not should_decode:
-                    should_decode = True
-                    break
+            for domain in self.root:
+                for video in os.listdir(domain):
+                    if not os.path.exists(os.path.join(self.decode_root, to_folder(domain), to_folder(video))):
+                        should_decode = True
+                        break
+
+        # Decode the video if needed
         if should_decode:
-            if os.path.exists(temp_folder):                     # Remove the dummy (or broken) folder
-                subprocess.call(["rm", "-rf", temp_folder])
-            os.mkdir(temp_folder)
-            self.decode(video_root = self.A_root, decode_folder = 'A')
-            self.decode(video_root = self.B_root, decode_folder = 'B')
+            if os.path.exists(self.decode_root):
+                subprocess.call(['rm', '-rf', self.decode_root])
+            os.mkdir(self.decode_root)
+            self.decodeVideo()
 
-        # Show the video folder information
-        self.files = dict()
-        self.files['A'] = os.listdir(self.A_root)
-        self.files['B'] = os.listdir(self.B_root)
-        INFO("Dataset type : %s \t Video number in A: %d\t  Video number in B: %d" % \
-                (self.__class__.__name__[:-6], len(self.files['A']), len(self.files['B'])))
+        # Obtain the list of frame list
+        self.frames = Dict()
+        for domain in os.listdir(self.decode_root):
+            self.frames[domain] = []
+            for video in os.listdir(os.path.join(self.decode_root, domain)):
+                self.frames[domain] += [glob(os.path.join(self.decode_root, domain, video, "*"))]
 
-    def decode(self, video_root, decode_folder):
+    def decodeVideo(self):
         """
-            Decode the video into the temp folder
-            The structure is shown below:
-            $ ls
-            >> temp_folder --+-- decode_folder --+-- video_name_1
-                                                 |
-                                                 +-- video_name_2
-                                                 |
-                                                 +-- video_name_3
-                                                 ...
+            Decode the single video into a series of images, and store into particular folder
 
-            Arg:    video_root      - The root folder of video
-                    decode_folder   - The decode folder under temp root folder
-        """        
-        INFO("---------- Start Decode Video ----------")
-        video_list = os.listdir(video_root)
-        for video_name in tqdm(video_list):
-            # Create the folder for each video
-            folder_name = ".".join(video_name.split('.')[:-1])      # remove the postfix
-            os.mkdir(os.path.join(self.temp_folder, folder_name))
-
-            # Decode the video
-            video_path = os.path.join(video_root, video_name)
-            subprocess.call(["ffmpeg", "-i", video_path, os.path.join(self.temp_folder, decode_folder, folder_name, "image-%05d.jpg")])
-            # print("    ".join(
-            #     ["ffmpeg", "-i", video_path, os.path.join(self.temp_folder, folder_name + "image-%05d.jpg")])
-            # )
-
-        INFO("---------- Finish Decode Video ----------")
-        exit()
+            Arg:    domain  - The str, the name of video domain
+        """
+        for domain in self.root:
+            os.mkdir(os.path.join(self.decode_root, to_folder(domain)))
+            for video in os.listdir(domain):
+                os.mkdir(os.path.join(self.decode_root, to_folder(domain), to_folder(video)))
+                source = os.path.join(domain, video)
+                target = os.path.join(self.decode_root, to_folder(domain), to_folder(video), "%5d.png")
+                # subprocess.call(['ffmpeg', '-i', source, '-vframes', str(10), target])
+                subprocess.call(['ffmpeg', '-i', source, target])
 
     def __len__(self):
-        return len(self.files['A'])
+        """
+            Return the number of video depend on the sample method
+        """
+        if self._len is None:
+            self._len = len(os.listdir(self.root[0]))
+            for domain in self.root:
+                if self.sample_method == down_sample:
+                    self._len = min(self._len, len(os.listdir(domain)))
+                elif self.sample_method == over_sample:
+                    self._len = max(self._len, len(os.listdir(domain)))
+                else:
+                    raise Exception("The sample method {} is not support".format(self.sample_method))
+        return self._len
 
     def __getitem__(self, index):
-        # Initalize the parameters
-        video_A_name = os.path.join(self.A_root, self.files['A'][index])
-        video_B_name = os.path.join(self.B_root, self.files['B'][index])
-        video_A_list = []
-        video_B_list = []
+        """
+            Return single batch of data, and the rank is BTCHW
+        """
+        result = []
+        for domain in self.root:
+            film_sequence = []
+            if self.rank_form == without_tuple_form:
+                max_init_frame_idx = len(self.frames[to_folder(domain)][index]) - self.T_ext
+                start_pos = random.randint(0, max_init_frame_idx)
+                for i in range(self.T_ext):
+                    img_path = self.frames[to_folder(domain)][index][start_pos + i]
+                    if self.use_cv:
+                        import cv2
+                        img = cv2.imread(img_path)
+                    else:
+                        from PIL import Image
+                        img = np.asarray(Image.open(img_path))
+                    film_sequence.append(img)
+            else:
+                max_init_frame_idx = len(self.frames[to_folder(domain)][index]) - self.T
+                start_pos = random.randint(self.t // 2, max_init_frame_idx)
+                for i in range(self.T):
+                    film_tuple = []
+                    for j in range(self.t):
+                        img_path = self.frames[to_folder(domain)][index][start_pos + i + j - self.t // 2]
+                        if self.use_cv:
+                            import cv2
+                            img = cv2.imread(img_path)
+                        else:
+                            from PIL import Image
+                            img = np.asarray(Image.open(img_path))
+                        film_tuple.append(img)
+                    film_tuple = np.asarray(film_tuple)
+                    film_sequence.append(film_tuple)
 
-        # Collect the video frame and resize
-        cap = cv2.VideoCapture(video_A_name)
-        counter = 0
-        while(cap.isOpened()):
-            ret, frame = cap.read()
-            if (self.T_max != -1 and counter > self.T_max) or frame is None:
-                break
-            if self.img_size is not None:
-                frame = cv2.resize(frame, (self.img_size[1], self.img_size[0]), interpolation=cv2.INTER_NEAREST)
-            video_A_list.append(frame)
-            counter += 1
+            # Transform the film sequence
+            film_sequence = np.asarray(film_sequence)
+            # print('film_sequence size: ', film_sequence.shape)
+            if self.transform:
+                film_sequence = self.transform(film_sequence)
 
-        cap = cv2.VideoCapture(video_B_name)
-        counter = 0
-        while(cap.isOpened()):
-            ret, frame = cap.read()
-            if (self.T_max != -1 and counter > self.T_max) or frame is None:
-                break
-            if self.img_size is not None:
-                frame = cv2.resize(frame, (self.img_size[1], self.img_size[0]), interpolation=cv2.INTER_NEAREST)
-            video_B_list.append(frame)
-            counter += 1
+            # Transfer the object as torch.Tensor object
+            if self.to_tensor:
+                if type(film_sequence) is not torch.Tensor:
+                    film_sequence = torch.from_numpy(film_sequence)
+            result.append(film_sequence)
+        return result
 
-
-        # Argmentation toward the whole video
-        if self.augmentations is not None:
-            video_A_list, video_B_list = self.augmentations(video_A_list, video_B_list)
-
-        # Normalize
-        video_A_tensor = torch.from_numpy(np.asarray(video_A_list, dtype = np.float))
-        video_B_tensor = torch.from_numpy(np.asarray(video_B_list, dtype = np.float))
-        video_A_tensor = (video_A_tensor - 127.5) / 127.5
-        video_B_tensor = (video_B_tensor - 127.5) / 127.5
-        min_value = min(torch.min(video_A_tensor).item(), torch.min(video_B_tensor).item())
-        max_value = max(torch.max(video_A_tensor).item(), torch.max(video_B_tensor).item())
-        assert min_value >= -1 and max_value <= 1
-
-        # Transform
-        video_A_tensor = video_A_tensor.transpose(2, 3).transpose(1, 2)
-        video_B_tensor = video_B_tensor.transpose(2, 3).transpose(1, 2)
-
-        # Transfer as float tensor
-        video_A_tensor = video_A_tensor.float()
-        video_B_tensor = video_B_tensor.float()
-
-        return video_A_tensor, video_B_tensor
+if __name__ == '__main__':
+    loader = data.DataLoader(
+        dataset = VideoDataset(
+            root = ['../../dataset/A', '../../dataset/B'], 
+            transform = None, 
+            T = 10, 
+            t = 3,
+            use_cv = False,
+        ), batch_size = 1, shuffle = True
+    )
+    for sequence_a, sequence_b in loader:
+        print('sequence_a shape: ', sequence_a.size())

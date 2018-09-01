@@ -1,4 +1,4 @@
-from lib.loader.video_loader2 import *
+from lib.loader.video_loader import *
 from collections import Iterator
 
 class InfiniteLoader(Iterator):

@@ -1,8 +1,7 @@
 from lib.loader import get_loader, InfiniteLoader
-from lib.model.recycle_gan2 import ReCycleGAN
+from lib.model.recycle_gan import ReCycleGAN
 from lib.utils import visualizeSingle
-import lib.augmentations as aug
-
+from lib import augmentations as aug
 from parse import parse_train_args
 
 from torch.autograd import Variable
@@ -11,6 +10,10 @@ from torch.utils import data
 from tqdm import tqdm
 import torch
 import os
+
+"""
+    This script define the training procedure of Re-cycle GAN
+"""
 
 def eval(args, model, video_a, video_b):
     """
@@ -26,18 +29,17 @@ def eval(args, model, video_a, video_b):
     true_b_seq = [frame.squeeze(1).to(args.device) for frame in torch.chunk(video_b, video_b.size(1), dim = 1)]
         
     # Form the input frame in original domain
-    true_a = true_a_seq[args.t - 1]
-    true_b = true_b_seq[args.t - 1]
+    true_a = true_a_seq[args.t]
+    true_b = true_b_seq[args.t]
 
-    # Do
+    # Render single image
     model.eval()
     with torch.no_grad():
-        # images = model.validate()
         images = model(
             true_a = true_a, 
             true_b = true_b, 
-            true_a_seq = true_a_seq[:args.t - 1], 
-            true_b_seq = true_b_seq[:args.t - 1], 
+            true_a_seq = true_a_seq[:args.t], 
+            true_b_seq = true_b_seq[:args.t], 
             warning = False
         )
         visualizeSingle(images)
@@ -55,7 +57,7 @@ def train(args):
             dataset = get_loader(args.dataset)(
                 root = [args.A, args.B], 
                 transform = aug.Compose([
-                    aug.RandomRotate(10),
+                    # aug.RandomRotate(10),
                     aug.RandomHorizontallyFlip(),
                     aug.ToTensor(),
                     aug.ToFloat(),
@@ -71,7 +73,7 @@ def train(args):
     )
 
     # Create the model and initialize
-    model = ReCycleGAN(A_channel = args.A_channel, B_channel = args.B_channel, T = args.T, r = args.r, t = 3, device = args.device)
+    model = ReCycleGAN(A_channel = args.A_channel, B_channel = args.B_channel, T = args.T, r = args.r, t = args.t, device = args.device)
     if os.path.exists(args.resume):
         model.load_state_dict(torch.load(args.resume))
     model.train()
@@ -88,7 +90,6 @@ def train(args):
 
         # Record render result
         if i % args.record_iter == 0 and i != 0:
-        # if i % args.record_iter == 0:
             torch.save(model.state_dict(), args.det)
             eval(args, model, video_a, video_b)
 

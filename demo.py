@@ -1,8 +1,9 @@
-from parse import parse_demo_args
-from lib.model.recycle_gan2 import ReCycleGAN
+from lib.model.recycle_gan import ReCycleGAN
 from lib.utils import get_frame_rate
-from tqdm import tqdm
+from parse import parse_demo_args
 import lib.augmentations as aug
+
+from tqdm import tqdm
 import numpy as np
 import subprocess
 import torch
@@ -11,8 +12,6 @@ import os
 
 """
     This script define the demo procedure to transfer the video to the opposite domain
-    Currently, this script only support OpenCV backend only
-
     In the intermediate of procedure, the 'demo_temp' folder will be created.
     Ane the structure can be addressed as following:
 
@@ -28,7 +27,7 @@ def demo(args):
         Arg:    args    - The argparse argument
     """   
     # Create the folders to store the intermediate frame
-    FOLDER = {'root': 'demo_temp', 'in': 'demo_temp/input', 'out': 'demo_temp/output'}
+    FOLDER = {'root': '.demo_temp', 'in': '.demo_temp/input', 'out': '.demo_temp/output'}
     for key, folder in FOLDER.items():
         if not os.path.exists(folder):
             subprocess.call(['mkdir', '-p', folder])

@@ -58,13 +58,13 @@ def parse_train_args():
     # model
     parser.add_argument('--A_channel'      , type = int, default = 3)
     parser.add_argument('--B_channel'      , type = int, default = 3)
-    parser.add_argument('--H'              , type = int, default = 224)
-    parser.add_argument('--W'              , type = int, default = 224)
+    parser.add_argument('--H'              , type = int, default = 240)
+    parser.add_argument('--W'              , type = int, default = 320)
     parser.add_argument('--r'              , type = int, default = 4)
     parser.add_argument('--n_iter'         , type = int, default = 1)
     parser.add_argument('--record_iter'    , type = int, default = 1)
     # temporal
-    parser.add_argument('--t'              , type = int, default = 3)
+    parser.add_argument('--t'              , type = int, default = 2)
     parser.add_argument('--T'              , type = int, default = 30)
     # dataset
     parser.add_argument('--dataset'        , type = str, default = 'video')
@@ -124,7 +124,7 @@ def parse_demo_args():
     parser.add_argument('--W'              , type = int, default = 224)
     parser.add_argument('--r'              , type = int, default = 4)
     # temporal
-    parser.add_argument('--t'              , type = int, default = 3)
+    parser.add_argument('--t'              , type = int, default = 2)
     # dataset
     parser.add_argument('--dataset'        , type = str, default = 'video')
     args = parser.parse_args()

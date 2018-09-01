@@ -1,4 +1,5 @@
 import numpy as np
+import subprocess
 import torch
 import cv2
 import os
@@ -20,6 +21,21 @@ def getParentFolder(path):
         return '.'
     else:
         return os.path.join(*path_list[:-1])
+
+def get_frame_rate(video_path):
+    """
+        Get fps toward specific video
+        The code is referred from here: https://askubuntu.com/questions/110264/how-to-find-frames-per-second-of-any-video-file
+    """
+    out = subprocess.check_output(["ffprobe", video_path, "-v", "0", "-select_streams", 
+        "v", "-print_format", "flat", "-show_entries", "stream=r_frame_rate"
+    ])
+    out = str(out)
+    rate = out.split('=')[1].strip()[1:-1].split('/')
+    if len(rate)==1:
+        return float(rate[0])
+    if len(rate)==2:
+        return float(rate[0])/float(rate[1][:-3])
 
 def visualizeSingle(images, save_path = 'val.png'):
     """

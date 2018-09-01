@@ -52,27 +52,58 @@ class ReCycleGAN(nn.Module):
             * You should notice that the tensor should move to device previously!!!!!
         """
         # Warn the user not to call this function during training
+        fake_b, reco_a, fake_a, reco_b = None, None, None, None
         if warning:
             INFO("This function can be called during inference, you should call <backward> function to update the model!")
 
-        # Get the tuple object before proceeding temporal predictor
-        fake_a_tuple = []
-        fake_b_tuple = []
-        for i in range(self.t - 1):
-            fake_a_tuple.append(self.G_B_to_A(true_b_seq[i]))
-            fake_b_tuple.append(self.G_A_to_B(true_a_seq[i]))
-        fake_a_tuple = torch.cat(fake_a_tuple, dim = 1)
-        fake_b_tuple = torch.cat(fake_b_tuple, dim = 1)
-        true_a_tuple = torch.cat(true_a_seq, dim = 1)
-        true_b_tuple = torch.cat(true_b_seq, dim = 1)
-        true_a = true_a
-        true_b = true_b
+        if true_a is None and true_b is None and true_a_seq is None and true_b_seq is None:
+            raise Exception("The input are all None. You should at least assign the input of one domain !")
+        if true_a is not None and true_a_seq is not None:
+            # ----------------------------------------------------------------------------
+            # A -> B -> A
+            # ----------------------------------------------------------------------------
+            # Move to specific device
+            true_a = true_a.to(self.device)
+            true_a_seq = [frame.to(self.device) for frame in true_a_seq]
 
-        # Generate
-        fake_b = 0.5 * (self.G_A_to_B(true_a) + self.P_B(fake_b_tuple))
-        reco_a = 0.5 * (self.G_B_to_A(self.P_B(fake_b_tuple)) + self.P_A(true_a_tuple))
-        fake_a = 0.5 * (self.G_B_to_A(true_b) + self.P_A(fake_a_tuple))
-        reco_b = 0.5 * (self.G_A_to_B(self.P_A(fake_a_tuple)) + self.P_B(true_b_tuple))
+            # Get the tuple object before proceeding temporal predictor
+            fake_b_tuple = []
+            for i in range(self.t - 1):
+                fake_b_tuple.append(self.G_A_to_B(true_a_seq[i]))
+            fake_b_tuple = torch.cat(fake_b_tuple, dim = 1)
+            true_a_tuple = torch.cat(true_a_seq, dim = 1)
+            true_a = true_a
+
+            # Generate
+            fake_b = 0.5 * (self.G_A_to_B(true_a) + self.P_B(fake_b_tuple))
+            reco_a = 0.5 * (self.G_B_to_A(self.P_B(fake_b_tuple)) + self.P_A(true_a_tuple))
+        elif not (true_a is None and true_a_seq is None):
+            raise Exception("true_a type: {} true_a_tuple type: {}. ".format(type(true_a), type(true_a_seq)), 
+                "You should make sure to fill the both input if you want to utilize domain A!"
+            )
+        if true_b is not None and true_b_seq is not None:
+            # ----------------------------------------------------------------------------
+            # B -> A -> B
+            # ----------------------------------------------------------------------------
+            # Move to specific device
+            true_b = true_b.to(self.device)
+            true_b_seq = [frame.to(self.device) for frame in true_b_seq]
+
+            # Get the tuple object before proceeding temporal predictor
+            fake_a_tuple = []
+            for i in range(self.t - 1):
+                fake_a_tuple.append(self.G_B_to_A(true_b_seq[i]))
+            fake_a_tuple = torch.cat(fake_a_tuple, dim = 1)        
+            true_b_tuple = torch.cat(true_b_seq, dim = 1)
+            true_b = true_b
+
+            # Generate        
+            fake_a = 0.5 * (self.G_B_to_A(true_b) + self.P_A(fake_a_tuple))
+            reco_b = 0.5 * (self.G_A_to_B(self.P_A(fake_a_tuple)) + self.P_B(true_b_tuple))
+        elif not (true_b is None and true_b_seq is None):
+            raise Exception("true_b type: {} true_b_tuple type: {}. ".format(type(true_b), type(true_b_seq)), 
+                "You should make sure to fill the both input if you want to utilize domain B!"
+            )
         return {
             'true_a': true_a,
             'fake_b': fake_b,

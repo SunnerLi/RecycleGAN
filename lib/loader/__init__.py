@@ -7,6 +7,7 @@ class InfiniteLoader(Iterator):
         """
             Constructor of the infinite loader
             The iteration object will create again while getting end
+
             Arg:    loader      - The torch.data.DataLoader object
                     max_iter    - The maximun iteration
         """
@@ -35,6 +36,7 @@ class InfiniteLoader(Iterator):
 def get_loader(name):
     """
         Return the corresponding data loader object
+        
         Arg:    name    - The name of dataset you want to use
         Ret:    The target data loader object
     """

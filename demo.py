@@ -1,7 +1,7 @@
 from lib.model.recycle_gan import ReCycleGAN
 from lib.utils import get_frame_rate
+from lib import augmentations as aug
 from parse import parse_demo_args
-import lib.augmentations as aug
 
 from tqdm import tqdm
 import numpy as np
@@ -14,14 +14,16 @@ import os
     This script define the demo procedure to transfer the video to the opposite domain
     In the intermediate of procedure, the 'demo_temp' folder will be created.
     Ane the structure can be addressed as following:
-    demo_temp --+-- input: Store the decode frame of the video
-                |
-                +-- output: Store the rendered frame of the video
+
+        demo_temp --+-- input: Store the decode frame of the video
+                    |
+                    +-- output: Store the rendered frame of the video
 """
 
 def demo(args):
     """
         Define the demo procedure
+
         Arg:    args    - The argparse argument
     """   
     # Create the folders to store the intermediate frame
@@ -104,7 +106,7 @@ def demo(args):
     source = os.path.join(FOLDER['out'], "%5d_img.jpg")
     target = args.output
     subprocess.call(['ffmpeg', '-i', source, "-vf", "fps=" + str(fps), target])
-    # subprocess.call(['rm', '-rf', FOLDER['root']])
+    subprocess.call(['rm', '-rf', FOLDER['root']])
 
 if __name__ == '__main__':
     args = parse_demo_args()

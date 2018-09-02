@@ -3,13 +3,16 @@ import torch.nn as nn
 import torch
 
 """
-    The cycleGAN discriminator
-    here: https://github.com/aitorzip/PyTorch-CycleGAN/blob/master/models.py
+    This script define the structure of discriminator
+    According to the original Re-cycle GAN paper, 
+    the structure of discriminator is 70x70 PatchGAN
+    And also it is also used in original CycleGAN official implementation
+    Thus we borrow the implementation from: https://github.com/aitorzip/PyTorch-CycleGAN/blob/master/models.py
 """
 
 class Discriminator(nn.Module):
     def __init__(self, n_in = 3, r = 1):
-        super(Discriminator, self).__init__()
+        super().__init__()
 
         # A bunch of convolutions one after another
         model = [   nn.Conv2d(n_in, 64 // r, 4, stride=2, padding=1),

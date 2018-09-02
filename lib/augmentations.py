@@ -14,7 +14,8 @@ BHWC2BCHW = 1
 
 def rotate(image, angle, center=None, scale=1.0):
     """
-        https://www.jianshu.com/p/b5c29aeaedc7
+        Rotate the image with specific angle
+        The code is borrowed from: https://www.jianshu.com/p/b5c29aeaedc7
     """
     (h, w) = image.shape[:2]
     if center is None:
@@ -25,13 +26,13 @@ def rotate(image, angle, center=None, scale=1.0):
 
 # =======================================================================================================
 # The augmentation operators we define includes:
-#   1. random rotate
-#   2. random horizontally flip
-#   3. to tensor
-#   4. to float
-#   5. transpose
-#   6. resize
-#   7. normalize
+#   1. to tensor
+#   2. to float
+#   3. transpose
+#   4. resize
+#   5. normalize
+#   6. random rotate
+#   7. random horizontally flip
 # =======================================================================================================
 
 class Compose(object):
@@ -47,79 +48,6 @@ class Compose(object):
         """
         for aug_op in self.augmentations:
             video_sequence = aug_op(video_sequence)
-        return video_sequence
-        
-class RandomRotate(object):
-    def __init__(self, degree):
-        self.degree = degree
-
-    def __call__(self, tensor):
-        """
-            Do the rotation with random angle
-
-            Arg:    tensor  - The np.ndarray or torch.Tensor obj, but the rank can be 5 or 6
-                    seed    - The random seed which will be used to determine angle
-            Ret:    Rotated tensor
-        """       
-        # Determine the rotation angle
-        seed = random.random()
-        is_tensor = tensor is torch.Tensor
-        if is_tensor:
-            tensor = tensor.numpy()
-        rotate_degree = seed * 2 * self.degree - self.degree
-
-        if len(tensor.shape) == 4:
-            # Deal with rank=5 situation (BTCHW)
-            video_sequence = []
-            for frame in tensor:
-                video_sequence.append(rotate(frame, rotate_degree))
-        elif len(tensor.shape) == 5:
-            # Deal with rank=6 situation (BTtCHW)
-            video_sequence = []
-            for _tuple in tensor:
-                tuple_list = []
-                for frame in _tuple:
-                    tuple_list.append(rotate(frame, rotate_degree))
-                video_sequence.append(np.asarray(tuple_list))
-        else:
-            raise Exception("This function don't support the input whose rank is neither 5 nor 6...")
-
-        # Transfer back to torch.Tensor if needed
-        video_sequence = np.asarray(video_sequence)
-        if is_tensor:
-            video_sequence = torch.from_numpy(video_sequence)
-        return video_sequence
-
-class RandomHorizontallyFlip(object):
-    def __call__(self, tensor):
-        seed = random.random()
-        if seed > 0.5:
-            return tensor
-        else:
-            is_tensor = tensor is torch.Tensor
-            if is_tensor:
-                tensor = tensor.numpy()
-
-            if len(tensor.shape) == 4:
-                # Deal with rank=5 situation (BTCHW)
-                video_sequence = []
-                for frame in tensor:
-                    video_sequence.append(cv2.flip(frame, 0))
-            elif len(tensor.shape) == 5:
-                # Deal with rank=6 situation (BTtCHW)
-                video_sequence = []
-                for _tuple in tensor:
-                    tuple_list = []
-                    for frame in _tuple:
-                        tuple_list.append(cv2.flip(frame, 0))
-                    video_sequence.append(np.asarray(tuple_list))
-            else:
-                raise Exception("This function don't support the input whose rank is neither 4 nor 5...")
-                
-        # Transfer back to torch.Tensor if needed
-        video_sequence = np.asarray(video_sequence)
-        if is_tensor:
-            video_sequence = torch.from_numpy(video_sequence)
         return video_sequence
 
 class ToTensor():
@@ -146,19 +74,89 @@ class Resize():
         self.use_cv = use_cv
         INFO("You should be aware that the tensor rank should be BTCHW or BTtCHW")
 
-    def __call__(self, tensor_hd):
-        if len(tensor_hd.size()) == 4:
-            return F.interpolate(tensor_hd, size = [self.size_tuple[0], self.size_tuple[1]])
-        elif len(tensor_hd.size()) == 5:
-            tensor_list = [tensor.squeeze(1) for tensor in torch.chunk(tensor_hd, tensor_hd.size(1), dim = 1)]  # T * tCHW
-            result_tensor = []
-            for tensor in tensor_list:
-                result_tensor.append(F.interpolate(tensor, size = [self.size_tuple[0], self.size_tuple[1]]))
-            result_tensor = torch.stack(result_tensor, dim = 1)
-            return result_tensor
+    def __call__(self, tensor):
+        """
+            Resized the tensor to the specific size
+
+            Arg:    tensor  - The torch.Tensor obj whose rank is 4
+            Ret:    Resized tensor
+        """ 
+        if len(tensor.size()) == 4:
+            return F.interpolate(tensor, size = [self.size_tuple[0], self.size_tuple[1]])
+        else:
+            raise Exception("This function don't support the input whose rank is not 4...")
 
 class Normalize():
     def __call__(self, tensor):
+        """
+            Normalized the tensor into the range [-1, 1]
+
+            Arg:    tensor  - The torch.Tensor obj whose rank is 4
+            Ret:    Normalized tensor
+        """ 
         tensor = (tensor - 127.5) / 127.5
         assert (torch.min(tensor) >= -1) and (torch.max(tensor) <= 1)
         return tensor
+        
+class RandomRotate(object):
+    def __init__(self, degree):
+        self.degree = degree
+
+    def __call__(self, tensor):
+        """
+            Do the rotation with random angle
+
+            Arg:    tensor  - The np.ndarray or torch.Tensor obj whose rank is 4
+                    seed    - The random seed which will be used to determine angle
+            Ret:    Rotated tensor
+        """       
+        # Determine the rotation angle
+        seed = random.random()
+        is_tensor = tensor is torch.Tensor
+        if is_tensor:
+            tensor = tensor.numpy()
+        rotate_degree = seed * 2 * self.degree - self.degree
+
+        if len(tensor.shape) == 4:
+            # Deal with rank=5 situation (BTCHW)
+            video_sequence = []
+            for frame in tensor:
+                video_sequence.append(rotate(frame, rotate_degree))
+        else:
+            raise Exception("This function don't support the input whose rank is not 4...")
+
+        # Transfer back to torch.Tensor if needed
+        video_sequence = np.asarray(video_sequence)
+        if is_tensor:
+            video_sequence = torch.from_numpy(video_sequence)
+        return video_sequence
+
+class RandomHorizontallyFlip(object):
+    def __call__(self, tensor):
+        """
+            Do the horizontally flip randomly
+
+            Arg:    tensor  - The np.ndarray or torch.Tensor obj whose rank is 4
+            Ret:    Flipped tensor
+        """ 
+        seed = random.random()
+        if seed > 0.5:
+            return tensor
+        else:
+            is_tensor = tensor is torch.Tensor
+            if is_tensor:
+                tensor = tensor.numpy()
+
+            if len(tensor.shape) == 4:
+                # Deal with rank=5 situation (BTCHW)
+                video_sequence = []
+                for frame in tensor:
+                    video_sequence.append(cv2.flip(frame, 0))
+            else:
+                raise Exception("This function don't support the input whose rank is not 4...")
+                
+        # Transfer back to torch.Tensor if needed
+        video_sequence = np.asarray(video_sequence)
+        if is_tensor:
+            video_sequence = torch.from_numpy(video_sequence)
+        return video_sequence

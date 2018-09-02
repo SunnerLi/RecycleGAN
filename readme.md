@@ -1,15 +1,16 @@
-## Re-cycle GAN
+# Re-cycle GAN
 ### The re-implementation of Re-cycle GAN
 
 [![Packagist](https://img.shields.io/badge/Pytorch-0.4.1-red.svg)]()
 [![Packagist](https://img.shields.io/badge/Python-3.5.0-blue.svg)]()
 [![Packagist](https://img.shields.io/badge/Backend-OpenCV_only-green.svg)]()
+[![Packagist](https://img.shields.io/badge/OS-Ubuntu_16.04-orange.svg)]()
 
 ![](https://github.com/SunnerLi/recyclegsn/blob/clear/img/recycle.png)
 
 Abstract
 ---
-This repository try to re-produce the idea of Re-cycle GAN [1] which is purposed by CMU. However, since CMU doesn't release any source code and collected dataset, we only extract the simple white and orange flower video to train the model. **You should notice that it's not the official implementation**.    
+This repository try to re-produce the idea of Re-cycle GAN [1] which is purposed by CMU. However, since CMU doesn't release any source code and collected dataset, we only extract the simple white and orange flower video to train the model. **You should notice that it's not the official implementation**. The idea of Re-cycle GAN is very similar to [vid2vid](https://github.com/NVIDIA/vid2vid). On the other hand, we provide the simple version whose idea can be traced much easily! For simplicity, this repository doesn't provide multi-GPU training or inference.     
 
 Branch Explain
 ---
@@ -33,7 +34,7 @@ $ python3 demo.py --in <video_path> --direction a2b --resume result.pkl
 
 Result
 ---
-![](https://i.imgur.com/Ylmasn5.png)    
+![](https://github.com/SunnerLi/recyclegsn/blob/master/img/recycle_val.png)    
 The above image shows the both domain. The left column is the original image in both domain. The middle column is the rendered result which adopt the linear-smoothing function in paper. The right column is the reconstruction result. In our experiment, we don't consider usual cycle-consistency loss but thinking of recycle loss.    
 
 ![](https://github.com/SunnerLi/recyclegsn/blob/clear/img/flower_result.gif)    

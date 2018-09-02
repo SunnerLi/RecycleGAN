@@ -3,11 +3,16 @@ import torch.nn as nn
 import numpy as np
 import torch
 
+"""
+    This script define the structure of spatial translation model
+    According to the original Re-cycle GAN paper, 
+    the structure of model is the same as generator which is adopt in "Fast Photo Style"
+    (3 conv + 3 deconv with 6 residual block in the middle)
+    Thus we borrow the implementation from: https://github.com/abhiskk/fast-neural-style
+"""
+
 class SpatialTranslationModel(nn.Module):
     def __init__(self, n_in = 3, n_out = 3, r = 1):
-        """
-            https://github.com/abhiskk/fast-neural-style revised
-        """
         super().__init__()
 
         # Initial convolution layers
@@ -53,7 +58,6 @@ class SpatialTranslationModel(nn.Module):
         y = torch.tanh(y)
         return y
 
-
 class ConvLayer(torch.nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):
         super(ConvLayer, self).__init__()
@@ -65,7 +69,6 @@ class ConvLayer(torch.nn.Module):
         out = self.reflection_pad(x)
         out = self.conv2d(out)
         return out
-
 
 class ResidualBlock(torch.nn.Module):
     """ResidualBlock
@@ -87,7 +90,6 @@ class ResidualBlock(torch.nn.Module):
         out = self.in2(self.conv2(out))
         out = out + residual
         return out
-
 
 class UpsampleConvLayer(torch.nn.Module):
     """UpsampleConvLayer
@@ -112,7 +114,6 @@ class UpsampleConvLayer(torch.nn.Module):
         out = self.reflection_pad(x_in)
         out = self.conv2d(out)
         return out
-
 
 class InstanceNormalization(torch.nn.Module):
     """InstanceNormalization

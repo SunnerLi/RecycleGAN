@@ -9,24 +9,15 @@ import torch
 import math
 import os
 
+"""
+    This script define the data loader of video version
+"""
+
+# Constant
 down_sample = 0
 over_sample = 1
-with_tuple_form = 0
-without_tuple_form = 1
-
-def _domain2folder(domain):
-    domain_list = domain.split('/')
-    while True:
-        if '.' in domain_list:
-            domain_list.remove('.')
-        elif '..' in domain_list:
-            domain_list.remove('..')
-        else:
-            break
-    return '_'.join(domain_list)       
-
-def _file2folder(file_name):
-    return '_'.join(file_name.split('.')[:-1])
+with_tuple_form = 0     # BTtCHW
+without_tuple_form = 1  # BTCHW
 
 def to_folder(name):
     if os.path.isdir(name):
@@ -128,8 +119,6 @@ class VideoDataset(data.Dataset):
     def decodeVideo(self):
         """
             Decode the single video into a series of images, and store into particular folder
-
-            Arg:    domain  - The str, the name of video domain
         """
         for domain in self.root:
             os.mkdir(os.path.join(self.decode_root, to_folder(domain)))
@@ -193,7 +182,6 @@ class VideoDataset(data.Dataset):
 
             # Transform the film sequence
             film_sequence = np.asarray(film_sequence)
-            # print('film_sequence size: ', film_sequence.shape)
             if self.transform:
                 film_sequence = self.transform(film_sequence)
 

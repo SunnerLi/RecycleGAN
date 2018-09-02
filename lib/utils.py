@@ -10,9 +10,7 @@ def INFO(string):
 def getParentFolder(path):
     """
         Get the parent folder path
-        ==================================================
-        * Notice: this function only support UNIX system!
-        ==================================================
+        
         Arg:    path - The path you want to examine
         Ret:    The path of parent folder 
     """
@@ -26,6 +24,9 @@ def get_frame_rate(video_path):
     """
         Get fps toward specific video
         The code is referred from here: https://askubuntu.com/questions/110264/how-to-find-frames-per-second-of-any-video-file
+
+        Arg:    video_path  - The path of video
+        Ret:    The fps
     """
     out = subprocess.check_output(["ffprobe", video_path, "-v", "0", "-select_streams", 
         "v", "-print_format", "flat", "-show_entries", "stream=r_frame_rate"
@@ -45,9 +46,13 @@ def visualizeSingle(images, save_path = 'val.png'):
                           The structure of images is like:
                           {
                               'real_a': <real_a>,
+                              'fake_b_spat': <fake_b_spat>,
+                              'fake_b_temp': <fake_b_temp>,
                               'fake_b': <fake_b>,
                               'reco_a': <reco_a>,
                               'real_a': <real_a>,
+                              'fake_a_spat': <fake_a_spat>,
+                              'fake_a_temp': <fake_a_temp>,
                               'fake_b': <fake_b>,
                               'reco_a': <reco_a>,
                           }

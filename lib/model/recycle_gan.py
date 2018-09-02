@@ -9,9 +9,9 @@ from torch.optim import Adam
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
-import math
 
 import itertools
+import math
 
 """
     This script define the structure of Re-cycle GAN

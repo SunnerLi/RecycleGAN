@@ -14,7 +14,6 @@ import os
     This script define the demo procedure to transfer the video to the opposite domain
     In the intermediate of procedure, the 'demo_temp' folder will be created.
     Ane the structure can be addressed as following:
-
     demo_temp --+-- input: Store the decode frame of the video
                 |
                 +-- output: Store the rendered frame of the video
@@ -23,7 +22,6 @@ import os
 def demo(args):
     """
         Define the demo procedure
-
         Arg:    args    - The argparse argument
     """   
     # Create the folders to store the intermediate frame
@@ -35,7 +33,8 @@ def demo(args):
     # Decode source video
     source = args.input
     target = os.path.join(FOLDER['in'], "%5d_img.jpg")
-    subprocess.call(['ffmpeg', '-i', source, '-vframes', str(100), target])
+    # subprocess.call(['ffmpeg', '-i', source, '-vframes', str(100), target])
+    subprocess.call(['ffmpeg', '-i', source, target])
     fps = get_frame_rate(source)
     frame_path_list = sorted(os.listdir(FOLDER['in']))
 
@@ -52,7 +51,7 @@ def demo(args):
         A_channel = args.A_channel, 
         B_channel = args.B_channel, 
         r = args.r, 
-        t = 3, 
+        t = args.t, 
         device = args.device
     )
     if not os.path.exists(args.resume):
@@ -74,15 +73,16 @@ def demo(args):
             Q.append(img)
 
             # Render toward the specific direction
-            if i >= (args.t - 1):
+            if i >= (args.t):
                 true_frame = Q[-1]
-                true_tuple = Q[:args.t - 1]
+                true_tuple = Q[:args.t]
                 if args.direction == 'a2b':
                     images = model(true_a = true_frame, true_a_seq = true_tuple, warning = False)
                 elif args.direction == 'b2a':
                     images = model(true_b = true_frame, true_b_seq = true_tuple, warning = False)
                 else:
                     raise Exception("Invalid direction: {}" % args.direction)
+                Q.pop(0)
             else:
                 continue
 
@@ -93,15 +93,18 @@ def demo(args):
                 img = images['fake_a'][0]
             img = img.transpose(0, 1).transpose(1, 2)
             img = img * 127.5 + 127.5
-            assert (torch.min(img) >= 0) and (torch.max(img) <= 255)
             img = img.cpu().numpy()
-            cv2.imwrite(os.path.join(FOLDER['out'], img_name), img.astype(np.uint8))
+            true_frame = true_frame[0].transpose(0, 1).transpose(1, 2)
+            true_frame = true_frame * 127.5 + 127.5
+            true_frame = true_frame.cpu().numpy()
+            result_img = np.hstack((true_frame, img))
+            cv2.imwrite(os.path.join(FOLDER['out'], img_name), result_img.astype(np.uint8))
 
     # Encode rendered images as video and remove intermediate folder
     source = os.path.join(FOLDER['out'], "%5d_img.jpg")
     target = args.output
     subprocess.call(['ffmpeg', '-i', source, "-vf", "fps=" + str(fps), target])
-    subprocess.call(['rm', '-rf', FOLDER['root']])
+    # subprocess.call(['rm', '-rf', FOLDER['root']])
 
 if __name__ == '__main__':
     args = parse_demo_args()

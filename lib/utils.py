@@ -63,7 +63,7 @@ def visualizeSingle(images, save_path = 'val.png'):
         images_np[key] = image
 
     # Concat and show
-    result1 = np.hstack((images_np['true_a'], images_np['fake_b'], images_np['reco_a']))
-    result2 = np.hstack((images_np['true_b'], images_np['fake_a'], images_np['reco_b']))
+    result1 = np.hstack((images_np['true_a'], images_np['fake_b_spat'], images_np['fake_b_temp'], images_np['fake_b'], images_np['reco_a']))
+    result2 = np.hstack((images_np['true_b'], images_np['fake_a_spat'], images_np['fake_a_temp'], images_np['fake_a'], images_np['reco_b']))
     result = np.vstack((result1, result2))
     cv2.imwrite(save_path, result.astype(np.uint8))

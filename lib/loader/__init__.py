@@ -1,4 +1,5 @@
 from lib.loader.video_loader import *
+from lib.utils import INFO
 from collections import Iterator
 
 class InfiniteLoader(Iterator):

@@ -68,12 +68,12 @@ def train(args):
                 T = args.T, 
                 t = args.t,
                 use_cv = True,
-            ), batch_size = 1, shuffle = True
+            ), batch_size = args.batch_size, shuffle = True
         ), max_iter = args.n_iter
     )
 
     # Create the model and initialize
-    model = ReCycleGAN(A_channel = args.A_channel, B_channel = args.B_channel, T = args.T, r = args.r, t = args.t, device = args.device)
+    model = ReCycleGAN(A_channel = args.A_channel, B_channel = args.B_channel, T = args.T, t = args.t, r = args.r, device = args.device)
     if os.path.exists(args.resume):
         model.load_state_dict(torch.load(args.resume))
     model.train()

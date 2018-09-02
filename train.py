@@ -40,7 +40,6 @@ def eval(args, model, video_a, video_b):
             true_b = true_b, 
             true_a_seq = true_a_seq[:args.t], 
             true_b_seq = true_b_seq[:args.t], 
-            warning = False
         )
         visualizeSingle(images)
     model.train()
@@ -85,7 +84,7 @@ def train(args):
         # Update parameters
         model.setInput(video_a, video_b)
         model.backward()
-        bar.set_description("G: " + str(model.loss_G) + " D: " + str(model.loss_D) + " P: " + str(model.loss_P))
+        bar.set_description("G: " + str(model.loss_G.item()) + " D: " + str(model.loss_D.item()))
         bar.refresh()
 
         # Record render result

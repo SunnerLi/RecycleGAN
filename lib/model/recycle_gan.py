@@ -223,27 +223,34 @@ class ReCycleGAN(nn.Module):
         self.loss_D = 0.0
         self.loss_G = 0.0
 
-        # Generate fake_tuple in opposite domain
-        fake_b_frame_list = []
-        fake_a_frame_list = []
-        for i in range(self.T):
-            fake_b_frame_list.append(self.G_A_to_B(true_a_frame_list[i]))
-            fake_a_frame_list.append(self.G_B_to_A(true_b_frame_list[i]))
-
-        # ==================== Accumulate loss by each time step ====================
+        # ==================== Accumulate loss by each time step ====================================
+        # In the previous version, the fake frame in T time sequence will compute first,
+        # Furthermore, in order to utilize the tensor time by time, the new tensor object is created
+        # However, this coding idea cannot propogate the gradient into the previous generator
+        # As the result, we generate the fake image time by time!
+        # ===========================================================================================
         for i in range(self.t, self.T):
 
-            # generator and predictor
-            true_a_tuple = torch.cat(true_a_frame_list[i - self.t: i], dim = 1).detach()
-            fake_b_tuple = torch.cat(fake_b_frame_list[i - self.t: i], dim = 1).detach()
-            true_b_tuple = torch.cat(true_b_frame_list[i - self.t: i], dim = 1).detach()
-            fake_a_tuple = torch.cat(fake_a_frame_list[i - self.t: i], dim = 1).detach()
+            # Generate fake frames in opposite domain for single time step
+            fake_b_frame_list = []
+            fake_a_frame_list = []
+            for j in range(self.t + 1): # include the current frame
+                fake_b_frame_list.append(self.G_A_to_B(true_a_frame_list[i + j - self.t]))
+                fake_a_frame_list.append(self.G_B_to_A(true_b_frame_list[i + j - self.t]))
+
+            # Form the tuple object
+            true_a_tuple = torch.cat(true_a_frame_list[i - self.t: i], dim = 1)
+            true_b_tuple = torch.cat(true_b_frame_list[i - self.t: i], dim = 1)
+            fake_a_tuple = torch.cat(fake_a_frame_list[:-1], dim = 1) # exclude the current frame
+            fake_b_tuple = torch.cat(fake_b_frame_list[:-1], dim = 1) # exclude the current frame
+
+            # Accumulate the loss of generator and predictor
             self.loss_G += self.updateGenerator(true_a_tuple, fake_b_tuple, true_a_frame_list[i], true_b_frame_list[i], self.P_A, self.P_B, self.G_B_to_A, self.D_B)
             self.loss_G += self.updateGenerator(true_b_tuple, fake_a_tuple, true_b_frame_list[i], true_a_frame_list[i], self.P_B, self.P_A, self.G_A_to_B, self.D_A)
 
-            # discriminator
-            alter_fake_b = self.fake_b_buffer.push_and_pop(fake_b_frame_list[i])
-            alter_fake_a = self.fake_a_buffer.push_and_pop(fake_a_frame_list[i])            
+            # Accumulate the loss of discriminator
+            alter_fake_b = self.fake_b_buffer.push_and_pop(fake_b_frame_list[-1])
+            alter_fake_a = self.fake_a_buffer.push_and_pop(fake_a_frame_list[-1])            
             self.loss_D += self.updateDiscriminator(alter_fake_b, true_b_frame_list[i], self.D_B)
             self.loss_D += self.updateDiscriminator(alter_fake_a, true_a_frame_list[i], self.D_A)
 

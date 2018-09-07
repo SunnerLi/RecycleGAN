@@ -22,7 +22,7 @@ Usage
 ---
 The detail can be found in here. But you should download the dataset from the following link.
 ```
-https://drive.google.com/drive/folders/1JDso5HsPJAydaGzNGdQluzJk7bGk1Q1x?usp=sharing
+https://drive.google.com/drive/folders/1mmWND9ZLK9nZwa8lMQWOVjN5sU_rrWD0?usp=sharing
 ```
 And you can simply use the following command:
 ```
@@ -34,13 +34,13 @@ $ python3 demo.py --in <video_path> --direction a2b --resume result.pkl
 
 Result
 ---
-![](https://github.com/SunnerLi/RecycleGAN/blob/develop/img/recycle_val.png)    
+![](https://github.com/SunnerLi/RecycleGAN/blob/master/img/recycle_val.png)    
 The above image shows the both domain. The left column is the original image in both domain. The middle column is the rendered result which adopt the linear-smoothing function in paper. The right column is the reconstruction result. In our experiment, we don't consider usual cycle-consistency loss but thinking of recycle loss.    
 
-![](https://github.com/SunnerLi/RecycleGAN/blob/develop/img/green_to_orange.gif)    
+![](https://github.com/SunnerLi/RecycleGAN/blob/master/img/green_to_orange.gif)    
 We only show the single flower-to-flower transform result. In the first domain, the flower is composed by green stem and white bundle part, and the flower is orange in the second domain. The above GIF shows that the generator can render the whole image with fire tone, and the plant can be colored into orange.    
 
-![](https://github.com/SunnerLi/RecycleGAN/blob/develop/img/orange_to_green.gif)    
+![](https://github.com/SunnerLi/RecycleGAN/blob/master/img/orange_to_green.gif)    
 The next marvelous example is shown above. For the opposite direction, the generator can realize the petal meaning in both domain, and render into white! Also, the stem can be remain as green. As the time extend, the flower will open with green tone. The most successful feature is that **there is no discontinuous artifact** between each frame in time series.    
 
 Reference

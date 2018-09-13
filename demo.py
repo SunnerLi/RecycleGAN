@@ -79,9 +79,9 @@ def demo(args):
                 true_frame = Q[-1]
                 true_tuple = Q[:args.t]
                 if args.direction == 'a2b':
-                    images = model(true_a = true_frame, true_a_seq = true_tuple, warning = False)
+                    images = model(true_a = true_frame, true_a_seq = true_tuple)
                 elif args.direction == 'b2a':
-                    images = model(true_b = true_frame, true_b_seq = true_tuple, warning = False)
+                    images = model(true_b = true_frame, true_b_seq = true_tuple)
                 else:
                     raise Exception("Invalid direction: {}" % args.direction)
                 Q.pop(0)

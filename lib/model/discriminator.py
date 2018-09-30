@@ -7,7 +7,7 @@ import torch
     According to the original Re-cycle GAN paper, 
     the structure of discriminator is 70x70 PatchGAN
     And also it is also used in original CycleGAN official implementation
-    Thus we borrow the implementation from: https://github.com/aitorzip/PyTorch-CycleGAN/blob/master/models.py
+    The code is revised from: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/models/networks.py
 """
 
 class Discriminator(nn.Module):
@@ -37,5 +37,4 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         x =  self.model(x)
-        # Average pooling and flatten
-        return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)
+        return x

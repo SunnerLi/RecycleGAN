@@ -99,8 +99,8 @@ def parse_demo_args():
                         [Argument explain]
         
         <path>
-            --in                : The path of video you want to transfer
-            --out               : The path of result video
+            --input             : The path of video you want to transfer
+            --output            : The path of result video
             --direction         : The candidate is [a2b, b2a]
                                   The direction you want to proceed
             --resume            : The path of pre-trained model

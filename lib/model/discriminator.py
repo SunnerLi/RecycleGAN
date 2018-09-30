@@ -36,5 +36,15 @@ class Discriminator(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
+        # ================================================================================================================
+        # Notice:   The result in the readme is gotten by taking the average pooling
+        #           However, the original design of PatchGAN doesn't do the pooling
+        #           I refer the code might not be correct in the original reference URL
+        #
+        #           We change the URL as the official one, and remove this operation
+        #           The result might become worse
+        #           If you want to re-produce the result which is shown in the readme, just un-comment (1) code and comment (2)
+        # ================================================================================================================
         x =  self.model(x)
-        return x
+        # return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)        # (1)
+        return x                                                            # (2)

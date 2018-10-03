@@ -46,5 +46,5 @@ class Discriminator(nn.Module):
         #           If you want to re-produce the result which is shown in the readme, just un-comment (1) code and comment (2)
         # ================================================================================================================
         x =  self.model(x)
-        # return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)        # (1)
-        return x                                                            # (2)
+        return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)        # (1)
+        # return x                                                            # (2)

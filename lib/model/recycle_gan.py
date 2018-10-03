@@ -245,8 +245,8 @@ class ReCycleGAN(nn.Module):
             fake_b_tuple = torch.cat(fake_b_frame_list[:-1], dim = 1) # exclude the current frame
 
             # Accumulate the loss of generator and predictor
-            self.loss_G += self.updateGenerator(true_a_tuple, fake_b_tuple, true_a_frame_list[i], true_b_frame_list[i], self.P_A, self.P_B, self.G_B_to_A, self.D_B)
-            self.loss_G += self.updateGenerator(true_b_tuple, fake_a_tuple, true_b_frame_list[i], true_a_frame_list[i], self.P_B, self.P_A, self.G_A_to_B, self.D_A)
+            self.loss_G += self.updateGenerator(true_a_tuple, fake_b_tuple, true_a_frame_list[i], fake_b_frame_list[-1], self.P_A, self.P_B, self.G_B_to_A, self.D_B)
+            self.loss_G += self.updateGenerator(true_b_tuple, fake_a_tuple, true_b_frame_list[i], fake_a_frame_list[-1], self.P_B, self.P_A, self.G_A_to_B, self.D_A)
 
             # Accumulate the loss of discriminator
             alter_fake_b = self.fake_b_buffer.push_and_pop(fake_b_frame_list[-1])
